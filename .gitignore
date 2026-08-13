@@ -1,0 +1,35 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Expo / RN native output (prebuild is reproducible; do not commit)
+.expo/
+android/
+ios/
+*.apk
+*.aab
+*.keystore
+
+# Local env / secrets. No backend, but RPC endpoints and signing creds are still private.
+.env
+.env.*
+!.env.example
+
+# Spike scratch output (results are committed as spikes/*.md; raw logs are not)
+spikes/**/raw/
+spikes/**/*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Stale session log that predates the repo
+claude-session.jsonl
+
+# Grant application working files (session transcripts are attached to the form,
+# not committed — they can carry paths, tokens, and other local context)
+claude-session-*.jsonl
+GRANT-APPLICATION.md

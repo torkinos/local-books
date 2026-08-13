@@ -1,0 +1,27 @@
+{
+  "name": "local-books",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Private income books for people paid in crypto. Local-first, watch-only, no backend.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "npm run test --workspace @local-books/core",
+    "test:watch": "npm run test:watch --workspace @local-books/core",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^8.57.1",
+    "typescript": "~5.9.2"
+  }
+}
