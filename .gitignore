@@ -33,3 +33,4 @@ claude-session.jsonl
 # not committed — they can carry paths, tokens, and other local context)
 claude-session-*.jsonl
 GRANT-APPLICATION.md
+grant-upload/
