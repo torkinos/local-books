@@ -47,10 +47,16 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > self-check, tests) and badge in README. Remaining: push and watch the first remote
 > run go green, then enable branch protection so red blocks.
 
-### `[ ]` T5 · Expo prebuild + dev client on a physical Android device
+### `[~]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
 **Accept:** the app launches on a real Android phone and renders a placeholder screen;
 the pinned SDK version is written into DECISIONS.md.
+> **2026-08-23:** scaffold complete — SDK 57 pinned (recorded under D2), monorepo
+> metro config, placeholder screen that calls `@local-books/core` (bigint on Hermes
+> proof), telemetry off in every script; typechecks in the workspace. Remaining, on
+> your machine: `npm run prebuild` + `npm run android` with a phone attached — the
+> sandbox filesystem cannot extract the native template (its `android/` is gitignored
+> and regenerated per machine anyway).
 
 ### `[ ]` T6 · op-sqlite + SQLCipher behind `StoragePort`
 Wire op-sqlite with SQLCipher; key from `expo-secure-store`. Nothing in core imports it.
@@ -58,10 +64,13 @@ Wire op-sqlite with SQLCipher; key from `expo-secure-store`. Nothing in core imp
 inspecting the DB file with plain `sqlite3` fails to open it. Lint still passes (proving
 core never learned SQLite exists).
 
-### `[ ]` T7 · Telemetry off (D5)
+### `[x]` T7 · Telemetry off (D5)
 Disable Expo/EAS analytics; no crash reporter.
 **Accept:** documented in DECISIONS.md with the exact settings; a grep for analytics SDKs
 in `package.json` files returns nothing.
+> **2026-08-23:** `EXPO_NO_TELEMETRY=1` on every mobile script, documented under D5
+> with the grep proof (no analytics/crash SDKs anywhere). EAS-side env var noted for
+> T17.
 
 ### `[x]` S1 · **Spike: RPC backfill + rate limits** (weekend, ~4 h)
 > **2026-08-23:** done — `spikes/01-rpc-backfill.md`, verdict **GO**; ran the real core
