@@ -19,6 +19,7 @@ ios/
 # Spike scratch output (results are committed as spikes/*.md; raw logs are not)
 spikes/**/raw/
 spikes/**/*.log
+spikes/**/.build/
 
 # Editor / OS
 .DS_Store
