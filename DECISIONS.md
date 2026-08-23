@@ -78,6 +78,11 @@ whole build window (no upgrades before Sep 27) and by keeping SQLite behind
 **Revisit if:** the SDK pin has to break mid-window, or SQLCipher blocks the Android
 build. `StoragePort` exists precisely so this stays reversible.
 
+> **Pin set 2026-08-23 (T5):** Expo SDK **57** — `expo ~57.0.15`, `react-native
+> 0.86.2`, `react 19.2.3`, matching the official `sdk-57` template exactly. Current
+> stable, fifteen patch releases in; op-sqlite 18.1.4 declares open peer ranges, so
+> nothing constrains against it. No upgrades before Sep 27.
+
 ---
 
 ## D3 — Domain logic lives in a pure-TypeScript core, and purity is enforced
@@ -139,6 +144,13 @@ Task T6 disables Expo/EAS telemetry and documents the check. The same rule block
 crash reporters (Sentry and similar) for v0.1 — which is consistent with the KPI
 choice, since PROJECT.md line 53 already picked GitHub Release download count precisely
 because it needs zero instrumentation.
+
+> **Settings as of 2026-08-23 (T7, exact):** every `apps/mobile` npm script prefixes
+> `EXPO_NO_TELEMETRY=1`, which disables the Expo CLI's telemetry. No analytics or
+> crash-reporting SDK exists in any package.json (grep for
+> sentry|amplitude|segment|posthog|firebase|analytics across workspaces: no matches).
+> Remaining when EAS enters (T17): run builds with `EXPO_NO_TELEMETRY=1` set in the
+> environment as well.
 
 ---
 
