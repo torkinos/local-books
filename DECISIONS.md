@@ -266,3 +266,26 @@ level, so a two-invoice settlement is ambiguous by construction — PROJECT.md l
 exclude failed transactions; CSV export neutralizes spreadsheet formula injection in
 free-text cells; malformed wire amounts skip the instruction instead of aborting the
 page.
+
+## D11 — The RPC adapter is plain fetch JSON-RPC, not web3.js
+
+**Date:** 2026-08-23 · **Status:** accepted
+
+T8's original sketch said "RpcPort adapter over web3.js". Implemented without it:
+
+1. **Watch-only needs two methods.** `getSignaturesForAddress` and `getTransaction`
+   (jsonParsed) — the whole of web3.js buys nothing for a read-only surface, and
+   core's normalizer deliberately owns the wire shape (`RawTransaction.raw` is
+   `unknown` precisely so no web3.js typing leaks inward).
+2. **React Native cost.** web3.js drags the Buffer/crypto polyfill swamp into the app.
+   The one thing that genuinely needs cryptography — reference keygen (T13, D7) — uses
+   `@noble/ed25519` + expo-crypto's CSPRNG instead: pure JS, Hermes-clean, ~5 KB.
+3. **The shape is spike-proven.** The S1 harness ran this exact adapter design against
+   live mainnet for the whole measurement matrix.
+
+The adapter (`apps/mobile/src/adapters/rpc.ts`) also carries a per-request timeout —
+S1's airplane-mode caveat resolves here: a dead connection throws instead of hanging
+sync, and the driver's checkpoint makes the retry safe.
+
+**Revisit if:** v2 needs signing or websockets (it must not — watch-only forever), or
+an RPC provider requires a non-JSON-RPC transport.

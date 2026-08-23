@@ -71,7 +71,14 @@ export interface RpcPort {
     opts: { readonly before?: Signature; readonly limit: number },
   ): Promise<SignaturePage>;
 
-  /** Fetch full transactions. Batched because per-signature round-trips dominate backfill. */
+  /**
+   * Fetch full transactions, in order. May return FEWER than requested: an adapter
+   * that hits throttling or a network failure mid-batch returns what it fetched so
+   * far instead of discarding paid-for round-trips -- callers detect the shortfall
+   * with `missingSignatures` and retry the remainder later. A failure with zero
+   * progress throws (RateLimitedError for throttling), so a caller getting nothing
+   * still sees why.
+   */
   getTransactions(signatures: readonly Signature[]): Promise<readonly RawTransaction[]>;
 
   /** Identifies the endpoint in spike measurements and failover logs. */
