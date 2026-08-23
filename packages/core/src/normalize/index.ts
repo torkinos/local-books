@@ -11,15 +11,31 @@
  */
 import type { ChainEvent, Signature } from '../types/index.js';
 
+export { normalizeTransaction, normalizeTransactions } from './extract.js';
+
 /**
- * Identity of a single value movement.
+ * Identity of a single on-chain value movement.
  *
  * Signature alone is not enough: a batch payout is one signature containing many
  * transfers, and collapsing on signature would book one payment and silently drop the
- * rest. The pair (signature, instructionIndex) is the real key.
+ * rest. The pair (signature, instructionIndex) is the movement's key -- it is what
+ * match-confirmed and category ops record, and what matching joins on.
  */
 export function eventKey(event: Pick<ChainEvent, 'signature' | 'instructionIndex'>): string {
   return `${event.signature}:${event.instructionIndex}`;
+}
+
+/**
+ * Identity of a stored ChainEvent, which is a movement *as seen by one watched
+ * address*. The distinction matters when the user watches both sides of a transfer
+ * (business wallet -> savings wallet): the same movement legitimately produces an
+ * `out` event for one address and an `in` event for the other, and deduplicating on
+ * the movement alone would silently drop one side of the user's own ledger.
+ */
+export function eventIdentity(
+  event: Pick<ChainEvent, 'signature' | 'instructionIndex' | 'watchedAddress'>,
+): string {
+  return `${event.signature}:${event.instructionIndex}:${event.watchedAddress}`;
 }
 
 /**
@@ -27,13 +43,14 @@ export function eventKey(event: Pick<ChainEvent, 'signature' | 'instructionIndex
  *
  * First-wins rather than last-wins because the first copy came from the page we
  * checkpointed against; a later copy is a replay of the same on-chain fact and carries
- * no new information.
+ * no new information. Keyed by eventIdentity, so the two sides of a transfer between
+ * two watched addresses both survive.
  */
 export function dedupEvents(events: readonly ChainEvent[]): readonly ChainEvent[] {
   const seen = new Set<string>();
   const out: ChainEvent[] = [];
   for (const event of events) {
-    const key = eventKey(event);
+    const key = eventIdentity(event);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(event);

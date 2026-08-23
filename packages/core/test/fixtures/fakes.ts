@@ -128,8 +128,11 @@ export class FakeStorage implements StoragePort {
     this.checkpoints.set(checkpoint.address, checkpoint);
   }
   async clearProjection(): Promise<void> {
+    // Drops projection tables ONLY. The op log is source of truth and the chain-event
+    // store is the RPC cache -- S1 priced a full re-fetch at minutes of rate-limited
+    // quota, so rebuild() must never force one. Neither is touched here, matching the
+    // StoragePort contract ("Drop every projection table").
     this.projectionCleared += 1;
-    this.events.clear();
   }
 }
 

@@ -33,6 +33,15 @@ export interface IncomeStatement {
   readonly unvaluedCount: number;
 }
 
+/**
+ * The period is half-open: `[periodStart, periodEnd)`. Consecutive statements built
+ * the natural way (start-of-month to start-of-next-month) therefore never both claim
+ * an event landing exactly on the boundary -- inclusive-inclusive would count a
+ * payment stamped 00:00:00 on the 1st in two months and overstate annual turnover.
+ *
+ * Failed transactions are excluded: they moved no money, and a payment that failed
+ * once and succeeded on retry must appear in the books exactly once.
+ */
 export function buildIncomeStatement(
   rows: readonly IncomeRow[],
   fiat: FiatCode,
@@ -41,7 +50,13 @@ export function buildIncomeStatement(
 ): IncomeStatement {
   const inPeriod = rows.filter((row) => {
     const t = row.event.blockTime;
-    return t !== null && t >= periodStart && t <= periodEnd && row.event.direction === 'in';
+    return (
+      row.event.succeeded &&
+      t !== null &&
+      t >= periodStart &&
+      t < periodEnd &&
+      row.event.direction === 'in'
+    );
   });
 
   let total = 0n;
@@ -62,6 +77,61 @@ export function buildIncomeStatement(
     totalFiat: formatUnits(total, 2),
     unvaluedCount: unvalued,
   };
+}
+
+/**
+ * Monthly totals per client (T26; the income statement screen reads exactly this).
+ *
+ * Groups the statement's own rows, so a total here is by construction the same set of
+ * rows the CSV exports -- the "matches the CSV to the cent" property is structural,
+ * and the test that sums the CSV column pins it.
+ */
+export interface MonthlyClientTotal {
+  /** `YYYY-MM`, UTC -- same calendar the CSV dates use. */
+  readonly month: string;
+  readonly clientName: string | null;
+  /** Decimal string, 2 dp. Sum of valued rows only. */
+  readonly totalFiat: string;
+  readonly rowCount: number;
+  /** Rows in this group that lack a valuation; reported, never silently dropped. */
+  readonly unvaluedCount: number;
+}
+
+export function monthlyTotalsPerClient(statement: IncomeStatement): readonly MonthlyClientTotal[] {
+  const groups = new Map<string, { total: bigint; rows: number; unvalued: number }>();
+
+  for (const row of statement.rows) {
+    // Rows without blockTime never enter a statement (buildIncomeStatement requires a
+    // time to place them in the period), so this guard is for the type, not for data.
+    if (row.event.blockTime === null) continue;
+    const month = isoDate(row.event.blockTime).slice(0, 7);
+    const key = `${month}\u0000${row.clientName ?? ''}`;
+    const group = groups.get(key) ?? { total: 0n, rows: 0, unvalued: 0 };
+    group.rows += 1;
+    if (row.valuation) {
+      group.total += parseFiat(row.valuation.fiatAmount);
+    } else {
+      group.unvalued += 1;
+    }
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()]
+    .map(([key, group]) => {
+      const [month = '', client = ''] = key.split('\u0000');
+      return {
+        month,
+        clientName: client === '' ? null : client,
+        totalFiat: formatUnits(group.total, 2),
+        rowCount: group.rows,
+        unvaluedCount: group.unvalued,
+      };
+    })
+    .sort((a, b) =>
+      a.month !== b.month
+        ? a.month.localeCompare(b.month)
+        : (a.clientName ?? '').localeCompare(b.clientName ?? ''),
+    );
 }
 
 /**
@@ -111,7 +181,7 @@ export function toCsv(statement: IncomeStatement): string {
         row.category ?? '',
         row.event.memo ?? '',
       ]
-        .map(csvEscape)
+        .map((cell) => csvEscape(neutralizeFormula(cell)))
         .join(','),
     );
   }
@@ -130,13 +200,38 @@ export function csvEscape(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+/**
+ * Spreadsheet formula-injection guard.
+ *
+ * The CSV's designed consumer is Excel/Sheets on the accountant's machine, and the
+ * memo column is written by whoever paid -- any stranger on Solana can attach
+ * `=WEBSERVICE(...)` to a dust transfer at the watched address. Cells that a
+ * spreadsheet would evaluate (leading =, +, @, tab, CR, or a minus that is not simply
+ * a negative number) get a leading apostrophe, the standard force-text marker.
+ * Negative amounts pass through untouched: they are the one legitimate leading-minus.
+ */
+export function neutralizeFormula(value: string): string {
+  if (/^[=+@\t\r]/.test(value)) return `'${value}`;
+  if (value.startsWith('-') && !/^-\d+(\.\d+)?$/.test(value)) return `'${value}`;
+  return value;
+}
+
 /** `YYYY-MM-DD` in UTC. Deliberately not locale-dependent. */
 export function isoDate(seconds: UnixSeconds): string {
   return new Date(seconds * 1000).toISOString().slice(0, 10);
 }
 
+/**
+ * `fiatAmount` -> cents. Strict: valuations are minted exclusively by valueAtReceipt,
+ * which emits exactly two decimal places, so anything else here is a corrupted record
+ * -- and a corrupted amount must fail loudly, not be truncated toward zero (which
+ * would contradict the half-up policy in value/index.ts) or coerced to 0.00 (which
+ * would under-report income while `unvaluedCount` still says nothing was omitted).
+ */
 function parseFiat(value: string): bigint {
-  const [whole = '0', fraction = ''] = value.replace('-', '').split('.');
-  const scaled = BigInt(`${whole}${fraction.padEnd(2, '0').slice(0, 2)}`);
-  return value.startsWith('-') ? -scaled : scaled;
+  const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+  if (!match) throw new RangeError(`Not a 2dp fiat amount: ${JSON.stringify(value)}`);
+  const [, sign, whole, fraction = ''] = match;
+  const scaled = BigInt(`${whole}${fraction.padEnd(2, '0')}`);
+  return sign === '-' ? -scaled : scaled;
 }

@@ -10,8 +10,9 @@
  * crypto directly. Those arrive through ports (see src/ports/) so the same code runs
  * on a phone, on a desktop, and in a Node test process against fixtures.
  *
- * There is a test that verifies this guard actually fires -- see the `check:purity`
- * script. A guard nobody has watched fail is not known to work.
+ * `npm run check:purity` (scripts/check-purity.mjs) verifies this guard actually
+ * fires by linting a canary file full of banned constructs and demanding failure.
+ * A guard nobody has watched fail is not known to work.
  */
 const RESTRICTED_PATTERNS = [
   {
@@ -90,6 +91,16 @@ module.exports = {
         object: 'Math',
         property: 'random',
         message: 'Inject randomness so reference-key generation is reproducible in tests.',
+      },
+    ],
+    // Zero-argument `new Date()` reads the ambient clock -- the same platform read as
+    // Date.now() in different spelling. With an argument it is a deterministic
+    // conversion (report/index.ts isoDate) and stays allowed.
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+        message: 'new Date() reads the ambient clock. Inject time via ClockPort.',
       },
     ],
 
