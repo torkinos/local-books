@@ -16,7 +16,8 @@
     "test:watch": "npm run test:watch --workspace @local-books/core",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check:purity": "npm run check:purity --workspace @local-books/core",
+    "check": "npm run typecheck && npm run lint && npm run check:purity && npm test"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.18.0",

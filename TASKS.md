@@ -16,29 +16,36 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cut
 
 ## W1 · Thu Aug 13 – Sun Aug 23 — scaffold + spikes
 
-### `[ ]` T1 · Repo, license, README `[M2]`
+### `[x]` T1 · Repo, license, README `[M2]`
+> **2026-08-23:** repo public (verified logged-out, HTTP 200), four root docs present,
+> README added — states watch-only, no backend, and has a build section.
 Initialise the repo, MIT license, README with a one-paragraph description and a build
 section. Push to GitHub **public**.
 **Accept:** repo reachable at a public URL by someone logged out; README states what the
 app is, that it is watch-only, and that it has no backend; `PROJECT.md`, `PLAN.md`,
 `TASKS.md`, `DECISIONS.md` present at root.
 
-### `[ ]` T2 · Monorepo + core package skeleton
+### `[x]` T2 · Monorepo + core package skeleton
 npm workspaces (DECISIONS.md D6): `packages/core`, `apps/mobile`. Core is `type: module`,
 strict TS, `types: []`.
 **Accept:** `npm install` succeeds from a clean clone; `npm run typecheck` passes;
 `packages/core` has zero runtime dependencies.
 
-### `[ ]` T3 · Vitest + the purity guard
+### `[x]` T3 · Vitest + the purity guard
+> **2026-08-23:** guard watched failing: a `react-native` import in core fails lint with
+> "core is platform-free (PROJECT.md line 61). Keep RN in apps/mobile".
 Vitest for core. ESLint config banning `react*`, `react-native*`, `expo*`,
 `@op-engineering/*`, `@solana/*`, Node builtins, `Date.now`, `Math.random`, `fetch`.
 **Accept:** `npm test` runs (green, even with one trivial test); adding
 `import 'react-native'` to a core file **fails lint** — demonstrated once and the output
 pasted into the PR. A guard nobody has watched fail is not known to work.
 
-### `[ ]` T4 · CI
+### `[~]` T4 · CI
 GitHub Actions: install, typecheck, lint, test on push and PR.
 **Accept:** a red build blocks; badge in README.
+> **2026-08-23:** `.github/workflows/ci.yml` written (typecheck, lint, purity-guard
+> self-check, tests) and badge in README. Remaining: push and watch the first remote
+> run go green, then enable branch protection so red blocks.
 
 ### `[ ]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
@@ -56,7 +63,10 @@ Disable Expo/EAS analytics; no crash reporter.
 **Accept:** documented in DECISIONS.md with the exact settings; a grep for analytics SDKs
 in `package.json` files returns nothing.
 
-### `[ ]` S1 · **Spike: RPC backfill + rate limits** (weekend, ~4 h)
+### `[x]` S1 · **Spike: RPC backfill + rate limits** (weekend, ~4 h)
+> **2026-08-23:** done — `spikes/01-rpc-backfill.md`, verdict **GO**; ran the real core
+> driver against both live endpoints; endpoint order + no-batching decision recorded as D9.
+> Remaining: 15-min on-device re-run during the W2 device pass (datacenter-IP caveat).
 Page a real busy mainnet address across 2–3 public endpoints, persisting cursor state.
 Kill mid-sync; resume. Toggle airplane mode mid-page.
 **Accept:** `spikes/01-rpc-backfill.md` records, per endpoint: pages fetched, calls made,
@@ -83,7 +93,7 @@ font, or page-break problems with a fix or a workaround.
 
 ## W2 · Mon Aug 24 – Sun Aug 30 — the demo path
 
-### `[ ]` T8 · Domain types + ports
+### `[x]` T8 · Domain types + ports
 `Address`, `Signature`, `ReferenceKey`, `TokenAmount` (bigint), `ChainEvent`, `Op`,
 `Valuation`. Ports: `RpcPort`, `StoragePort`, `ClockPort`, `RatePort`, `DocPort`,
 `ReferenceKeyPort`. Deferred seams (P2P, OCR, NL) as **types only**.
@@ -96,7 +106,7 @@ silently — the backfill driver owns pacing.
 **Accept:** fetches a real page of signatures on devnet; a forced 429 throws
 `RateLimitedError` with `retryAfterMs` when the server sent it.
 
-### `[ ]` T10 · Checkpointed backfill driver (core)
+### `[x]` T10 · Checkpointed backfill driver (core)
 Async generator yielding after every checkpointed page, returning a requested `pauseMs`;
 the caller sleeps (D8).
 **Accept:** unit tests cover — pages to end of history; checkpoints after **every** page;
@@ -104,14 +114,22 @@ resumes from the stored cursor after being killed mid-sync; retries the *same* c
 after a 429; asks for failover after N consecutive 429s; stops at the page budget. No
 timers or network in core.
 
-### `[ ]` T11 · Transaction normalizer + dedup
+### `[x]` T11 · Transaction normalizer + dedup
+> **2026-08-23:** extraction implemented (`normalize/extract.ts`) against a real
+> mainnet fixture; batch-payout and idempotency tests in place; instruction indices are
+> endpoint-stable and dedup identity includes the watched address (D10); malformed
+> amounts skip rather than abort the page. 29 normalizer tests.
 `jsonParsed` → `ChainEvent`. SOL transfers, SPL transfers via pre/post token balances,
 memo, blockTime, counterparty, reference accounts.
 **Accept:** identity is `(signature, instructionIndex)`, not signature alone — a batch
 payout with three transfers in one transaction produces three events, proven by a test.
 Re-ingesting the same page changes nothing.
 
-### `[ ]` T12 · Op log + projection + **rebuild equivalence** (D4)
+### `[x]` T12 · Op log + projection + **rebuild equivalence** (D4)
+> **2026-08-23:** `rebuild()` added (loads ops + events for every op-log-named address,
+> clears, refolds); equivalence, idempotence, and op-log-purity tests green. The
+> app-side half of D4 (SQLite tables vs fresh fold) waits on T6/T15 — noted in the
+> test file.
 Append-only op log; `project(ops, chainEvents)` pure and synchronous; `rebuild()` in the
 app clears the projection and refolds.
 **Accept:** a test folds inputs, clears, rebuilds from the same inputs, and asserts
@@ -124,7 +142,7 @@ from invoice fields.
 **Accept:** 1000 generated keys are unique; a code comment states the deanonymisation
 reasoning and points at PROJECT.md line 55.
 
-### `[ ]` T14 · Tier-a matcher
+### `[x]` T14 · Tier-a matcher
 Match incoming successful transfers carrying an invoice's reference.
 **Accept:** tests cover — matches on reference; **does not** match a direct transfer with
 no reference (the tier-b gap, asserted as a passing test); ignores failed transactions;
@@ -185,21 +203,30 @@ it auto-match. Screen-captured.
 **Accept:** returns the rate **effective on the requested date**, not today's; throws
 rather than substituting a nearby day; works offline once cached.
 
-### `[ ]` T24 · Valuation at receipt date
+### `[x]` T24 · Valuation at receipt date
+> **2026-08-23:** `value.test.ts` added — half-up-at-2dp cases float arithmetic gets
+> wrong, non-stable-mint throw, full provenance passthrough, receipt-date (not "now")
+> rate request. 14 tests.
 Stablecoin→USD 1:1; USD→local via the daily rate. Integer arithmetic only.
 **Accept:** every `Valuation` carries source, rate, and rate date (line 86) — the type
 makes this impossible to omit; a non-stable mint throws rather than guessing;
 `multiplyDecimals` is tested for half-up rounding at 2 dp.
 
-### `[ ]` T25 · Generic CSV export
+### `[x]` T25 · Generic CSV export
+> **2026-08-23:** RFC 4180 round-trip tested through a strict parser; unvalued rows
+> reported; corrupted fiat amounts throw instead of truncating; spreadsheet formula
+> injection neutralized (attacker-controlled memo → inert text).
 Audit columns: rate, rate source, rate date alongside amounts.
 **Accept:** RFC 4180 escaping tested against a memo containing a comma, a quote, and a
 newline; the file opens cleanly in a spreadsheet; unvalued rows are **reported**, not
 silently dropped from the total.
 
-### `[ ]` T26 · Income statement screen
+### `[~]` T26 · Income statement screen
 Monthly totals per client from the projection.
 **Accept:** totals match the CSV to the cent.
+> **2026-08-23:** core half done — `monthlyTotalsPerClient` with a test tying monthly
+> totals, statement total, and the summed CSV column to the cent. The *screen* waits
+> on the app shell (T5/T15).
 
 ---
 

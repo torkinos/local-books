@@ -201,3 +201,56 @@ cheaper failure than advancing first and losing it.
 **Confirm in Spike 1.** If measured 429 behaviour shows the pacing model is wrong —
 e.g. endpoints need jitter, or per-endpoint concurrency beats sequential paging — this
 gets revised before anything is built on top of it.
+
+> **Confirmed by S1 (2026-08-23).** The driver absorbed mainnet-beta's server-advised
+> 10 s backoffs and resumed exactly-once after two different crash shapes, unmodified
+> (`spikes/01-rpc-backfill.md`). Status: accepted.
+
+## D9 — Endpoint order is fixed (publicnode → mainnet-beta → user RPC), no JSON-RPC batching
+
+**Date:** 2026-08-23 · **Status:** accepted — from S1 measurements
+
+S1 (`spikes/01-rpc-backfill.md`) found the free public pool is exactly two endpoints,
+and they are not peers: publicnode sustains ~5 tx/s of `getTransaction` with zero 429s
+where mainnet-beta manages ~0.6 tx/s with a 429 every ~10 calls. So the T9 adapter uses
+**publicnode as primary and mainnet-beta as failover** — an ordered list, not
+round-robin — with a user-supplied RPC URL (PROJECT.md line 72) offered in rate-limit
+error copy as the first remedy.
+
+`getTransactions` fetches **sequentially, never via JSON-RPC batch arrays**: publicnode
+rejects batches outright (HTTP 400) and mainnet-beta rate-limits them above ~10, so
+batching buys nothing on the primary and complicates pacing on the failover. The
+driver's `pauseMs` (D8) stays the only throttle.
+
+Revisit only if the on-device re-run of the S1 harness (W2 device pass) contradicts the
+datacenter-measured numbers.
+
+## D10 — Event identity is endpoint-stable and per-watched-address
+
+**Date:** 2026-08-23 · **Status:** accepted — from adversarial review of the normalizer
+
+Two identity rules, both existing to survive re-fetches and multi-wallet users:
+
+**`instructionIndex` never depends on inner-instruction recording.** Whether a node
+serves `meta.innerInstructions` is that node's configuration, and the backfill driver
+rotates endpoints on failover — so the same signature can arrive with and without CPI
+detail. A top-level instruction keeps its position in `message.instructions` (part of
+the signed transaction, identical everywhere); an inner instruction gets
+`(parent+1)*1024 + offset`. A provider omitting inner data can make a CPI event
+*absent* (harmless: stored-wins merge keeps the original) but can never *renumber*
+anything — renumbering would defeat `(signature, instructionIndex)` dedup and
+double-book payments on failover.
+
+**Stored events dedup on `(signature, instructionIndex, watchedAddress)`.** A transfer
+between two wallets the user watches is one movement but two ledger facts — an `out`
+for one address, an `in` for the other. Deduplicating on the movement alone silently
+dropped one side. `eventKey` (movement) remains what ops and matching join on;
+`eventIdentity` (movement + watched address) is what the event store dedups on.
+
+In the same review pass: tier-a auto-apply now requires the transaction to admit
+exactly one transfer-to-invoice pairing (references are recovered at transaction
+level, so a two-invoice settlement is ambiguous by construction — PROJECT.md line 81's
+"a human confirms" extends to it); income statements are half-open `[start, end)` and
+exclude failed transactions; CSV export neutralizes spreadsheet formula injection in
+free-text cells; malformed wire amounts skip the instruction instead of aborting the
+page.

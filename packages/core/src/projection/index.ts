@@ -10,7 +10,15 @@
  * Pure and synchronous: no storage, no clock. The caller loads inputs and writes the
  * result.
  */
-import type { Address, ChainEvent, InvoiceCreatedOp, Op, Signature } from '../types/index.js';
+import type { StoragePort } from '../ports/index.js';
+import type {
+  Address,
+  ChainEvent,
+  InvoiceCreatedOp,
+  Op,
+  Signature,
+  UnixSeconds,
+} from '../types/index.js';
 import { dedupEvents, eventKey } from '../normalize/index.js';
 import { sortOps } from '../oplog/index.js';
 
@@ -119,9 +127,54 @@ export function project(
   return {
     invoices: invoiceViews,
     watchedAddresses: [...watched.values()],
-    unmatchedEvents: events.filter((e) => !matchedKeys.has(eventKey(e))),
+    // Failed transactions moved no money: they are not "unexplained deposits" and
+    // surfacing them as such would invite the user to book income that never arrived.
+    // They stay in the event store (they are chain facts) but not in this list.
+    unmatchedEvents: events.filter((e) => e.succeeded && !matchedKeys.has(eventKey(e))),
     categories,
   };
+}
+
+/**
+ * Throw the index away and refold from source (D4).
+ *
+ * Reads both inputs *before* clearing: the op log because it is the source of truth,
+ * chain events because they are the RPC cache -- re-derivable in principle, but S1
+ * measured a full re-fetch at minutes of rate-limited quota, so `clearProjection()`
+ * must never touch the events table (see StoragePort) and rebuild must not depend on
+ * the network. The caller persists the returned state as the new projection.
+ *
+ * Events are loaded for every address the op log has ever named: every
+ * `address-watched` target, and every invoice's `payTo` -- an invoice paid to an
+ * address the user never formally watched still had its payment ingested, and a
+ * rebuild must not orphan it. Unwatching hides an address from the UI but keeps its
+ * events, which may be matched and booked as income -- rebuilding must not silently
+ * retract them (see the address-unwatched case above).
+ *
+ * The clear and the subsequent persist of the returned state are two steps through
+ * this port. The app-side StoragePort MUST wrap its `clearProjection` and the write of
+ * the new state in one SQLite transaction (or write-then-swap), because Android kills
+ * processes mid-work as a matter of routine and a death between the two steps would
+ * otherwise leave the user opening onto empty books.
+ */
+export async function rebuild(storage: StoragePort): Promise<ProjectionState> {
+  const ops = await storage.readOps();
+  const addresses = new Set<Address>();
+  for (const op of ops) {
+    if (op.type === 'address-watched') addresses.add(op.address);
+    if (op.type === 'invoice-created') addresses.add(op.payTo);
+  }
+
+  const events: ChainEvent[] = [];
+  for (const address of addresses) {
+    // Plain loop, not push(...spread): a busy address holds well over 100k events
+    // (S1's scale), and spreading that many arguments overflows the call stack --
+    // on Hermes sooner than on Node.
+    for (const event of await storage.getChainEvents(address)) events.push(event);
+  }
+
+  await storage.clearProjection();
+  return project(ops, events);
 }
 
 /**
@@ -131,7 +184,7 @@ export function project(
  * any op or chain event -- folding it in would make the projection non-deterministic
  * and break the rebuild-equivalence test.
  */
-export function withOverdue(state: ProjectionState, now: number): ProjectionState {
+export function withOverdue(state: ProjectionState, now: UnixSeconds): ProjectionState {
   return {
     ...state,
     invoices: state.invoices.map((view) =>

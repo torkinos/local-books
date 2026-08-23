@@ -21,8 +21,11 @@ export {
   dedupEvents,
   mergeEvents,
   eventKey,
+  eventIdentity,
   sortByRecency,
   missingSignatures,
+  normalizeTransaction,
+  normalizeTransactions,
 } from './normalize/index.js';
 
 export { sortOps, dedupOps, makeOpId, stableStringify, opsAsOf } from './oplog/index.js';
@@ -30,7 +33,7 @@ export { sortOps, dedupOps, makeOpId, stableStringify, opsAsOf } from './oplog/i
 export { matchByReference, amountAgreement } from './match/index.js';
 export type { MatchCandidate, MatchTier, HeuristicMatchInput, HeuristicMatcher } from './match/index.js';
 
-export { project, withOverdue } from './projection/index.js';
+export { project, rebuild, withOverdue } from './projection/index.js';
 export type {
   ProjectionState,
   InvoiceView,
@@ -49,5 +52,13 @@ export {
   UnsupportedValuationError,
 } from './value/index.js';
 
-export { buildIncomeStatement, toCsv, csvEscape, isoDate, CSV_COLUMNS } from './report/index.js';
-export type { IncomeStatement, IncomeRow } from './report/index.js';
+export {
+  buildIncomeStatement,
+  monthlyTotalsPerClient,
+  toCsv,
+  csvEscape,
+  neutralizeFormula,
+  isoDate,
+  CSV_COLUMNS,
+} from './report/index.js';
+export type { IncomeStatement, IncomeRow, MonthlyClientTotal } from './report/index.js';

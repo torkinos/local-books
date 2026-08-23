@@ -95,6 +95,75 @@ describe('matchByReference', () => {
   });
 });
 
+describe('matchByReference: ambiguity gate', () => {
+  // References are recovered at transaction level (normalize/extract.ts), so a payer
+  // settling several invoices in one transaction puts every reference on every event.
+  // Auto-apply is allowed only when the pairing is forced; anything else double-books.
+  const invoiceB: InvoiceCreatedOp = {
+    ...invoice,
+    invoiceId: 'inv-002',
+    reference: asReferenceKey('ref-invoice-002'),
+  };
+
+  it('still auto-applies when each transfer carries exactly its own reference', () => {
+    const matches = matchByReference(
+      [
+        chainEvent({ signature: sig(9), instructionIndex: 0, references: [REFERENCE] }),
+        chainEvent({ signature: sig(9), instructionIndex: 1, references: [invoiceB.reference] }),
+      ],
+      [invoice, invoiceB],
+    );
+    expect(matches.map((m) => m.autoApplicable)).toEqual([true, true]);
+  });
+
+  it('demotes to human confirmation when both transfers carry both references', () => {
+    const refs = [REFERENCE, invoiceB.reference];
+    const matches = matchByReference(
+      [
+        chainEvent({ signature: sig(9), instructionIndex: 0, references: refs }),
+        chainEvent({ signature: sig(9), instructionIndex: 1, references: refs }),
+      ],
+      [invoice, invoiceB],
+    );
+    // All four pairings surface -- the user must see them -- but none auto-applies.
+    expect(matches).toHaveLength(4);
+    expect(matches.every((m) => m.tier === 'reference')).toBe(true);
+    expect(matches.every((m) => !m.autoApplicable)).toBe(true);
+  });
+
+  it('demotes a single transfer carrying two invoice references', () => {
+    const matches = matchByReference(
+      [chainEvent({ references: [REFERENCE, invoiceB.reference] })],
+      [invoice, invoiceB],
+    );
+    expect(matches).toHaveLength(2);
+    expect(matches.every((m) => !m.autoApplicable)).toBe(true);
+  });
+
+  it('demotes one reference appearing on two transfers in one transaction', () => {
+    const matches = matchByReference(
+      [
+        chainEvent({ signature: sig(9), instructionIndex: 0, references: [REFERENCE] }),
+        chainEvent({ signature: sig(9), instructionIndex: 1, references: [REFERENCE] }),
+      ],
+      [invoice],
+    );
+    expect(matches).toHaveLength(2);
+    expect(matches.every((m) => !m.autoApplicable)).toBe(true);
+  });
+
+  it('judges ambiguity per transaction, never across the ledger', () => {
+    const matches = matchByReference(
+      [
+        chainEvent({ signature: sig(1), references: [REFERENCE] }),
+        chainEvent({ signature: sig(2), references: [invoiceB.reference] }),
+      ],
+      [invoice, invoiceB],
+    );
+    expect(matches.map((m) => m.autoApplicable)).toEqual([true, true]);
+  });
+});
+
 describe('amountAgreement', () => {
   it('classifies exact, under, over, and wrong-token', () => {
     expect(amountAgreement(chainEvent({ amount: usdc('100') }), invoice)).toBe('exact');
