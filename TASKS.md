@@ -109,11 +109,21 @@ font, or page-break problems with a fix or a workaround.
 **Accept:** typecheck passes; no deferred seam has an implementation; money is bigint
 everywhere — a grep for `parseFloat`/`Number(` on amounts returns nothing.
 
-### `[ ]` T9 · `RpcPort` adapter over web3.js
+### `[x]` T9 · `RpcPort` adapter over web3.js
 Lives in `apps/mobile`. Surfaces 429s as `RateLimitedError` rather than retrying
 silently — the backfill driver owns pacing.
 **Accept:** fetches a real page of signatures on devnet; a forced 429 throws
 `RateLimitedError` with `retryAfterMs` when the server sent it.
+> **2026-08-23:** implemented as plain fetch JSON-RPC, not web3.js — recorded as D11.
+> `apps/mobile/src/adapters/rpc.ts`: D9 endpoint order (user RPC first when set),
+> sequential tx fetches, per-request timeout, 429→`RateLimitedError` incl. the
+> in-band-200 provider shape. Live devnet integration test run and passed (real
+> signature page fetched). Adversarial review then hardened it: only an EMPTY page
+> ends history (short pages cursor on — a short page must never mark the checkpoint
+> complete), `getTransactions` preserves partial progress across mid-batch throttling
+> (contract updated on the port), body reads covered by the timeout, RFC 9110
+> HTTP-date Retry-After parsed, malformed results labeled with the endpoint. 21 unit
+> tests, concurrency measured not assumed.
 
 ### `[x]` T10 · Checkpointed backfill driver (core)
 Async generator yielding after every checkpointed page, returning a requested `pauseMs`;
@@ -145,11 +155,14 @@ app clears the projection and refolds.
 **identical** state. Chain data never enters the op log — asserted by a test that reads
 the log after ingestion and finds no `ChainEvent`.
 
-### `[ ]` T13 · Reference-key generation (D7)
+### `[x]` T13 · Reference-key generation (D7)
 `ReferenceKeyPort` over a real keypair generator. Random, unlinkable, **not** derived
 from invoice fields.
 **Accept:** 1000 generated keys are unique; a code comment states the deanonymisation
 reasoning and points at PROJECT.md line 55.
+> **2026-08-23:** `apps/mobile/src/adapters/referenceKeys.ts` — `@noble/ed25519` over
+> injected CSPRNG (expo-crypto wired in `ports.ts`); 1000-key uniqueness test green;
+> D7/line-55 comment on the implementation; secret zeroed after derivation.
 
 ### `[x]` T14 · Tier-a matcher
 Match incoming successful transfers carrying an invoice's reference.
