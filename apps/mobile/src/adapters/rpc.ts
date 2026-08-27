@@ -10,7 +10,12 @@
  *     the core backfill driver owns pacing and failover (D8/D9), never this adapter.
  *   - getTransactions fetches SEQUENTIALLY, one request per signature. No JSON-RPC
  *     batch arrays: publicnode rejects them outright and mainnet-beta rate-limits
- *     them above ~10 (S1, D9).
+ *     them above ~10 (S1, D9). A null result (this node does not serve that
+ *     transaction) is OMITTED, never wrapped as fetched -- see the method.
+ *   - An empty signature page mid-backfill is only reported after the endpoint
+ *     confirms it knows the paging cursor AND the empty page reproduces on a second
+ *     ask -- an empty page durably ends the backfill, and a backend that merely
+ *     cannot see the cursor must not get to end it.
  *   - Every request carries a timeout. S1's airplane-mode caveat is exactly this: a
  *     dropped mobile connection must produce a thrown request, not a hung sync.
  */
@@ -86,29 +91,27 @@ export class JsonRpcAdapter implements RpcPort {
     address: Address,
     opts: { readonly before?: Signature; readonly limit: number },
   ): Promise<SignaturePage> {
-    const result = (await this.call('getSignaturesForAddress', [
-      address,
-      {
-        limit: opts.limit,
-        commitment: 'confirmed',
-        ...(opts.before ? { before: opts.before } : {}),
-      },
-    ])) as ReadonlyArray<{
-      signature: string;
-      slot: number;
-      blockTime: number | null;
-      err: unknown;
-    }>;
+    let result = await this.fetchSignaturePage(address, opts);
 
-    if (!Array.isArray(result)) {
-      // A misconfigured proxy or an arbitrary user-pasted endpoint can answer with
-      // null or an object. Label the error so the settings-screen copy can say "your
-      // endpoint is the problem" instead of surfacing an anonymous TypeError.
-      throw new RpcResponseError(
-        this.endpointLabel,
-        0,
-        `malformed getSignaturesForAddress result: ${result === null ? 'null' : typeof result}`,
-      );
+    // An empty page ends a backfill FOREVER: the core driver durably marks the
+    // checkpoint complete on it. But mid-backfill (a before cursor is set), an empty
+    // page has a second meaning: the answering backend simply does not know the
+    // cursor -- the failover endpoints are deliberately heterogeneous (D9), nodes
+    // behind one load balancer lag each other, and a user-pasted RPC promises
+    // nothing about retention. Trusting that page would silently truncate the books.
+    //
+    // Two guards, because the endpoint is a POOL, not a node, and every request may
+    // hit a different backend: (1) the endpoint must confirm it can see the cursor
+    // at all, or we throw and the engine rotates; (2) even then, the empty page must
+    // REPRODUCE on a second ask -- the confirmation may have come from a healthy
+    // sibling of the lagging backend that served the empty page, and the retry both
+    // detects that split and self-corrects it (a healthy backend answering the
+    // retry returns the real remaining history, which we serve instead). Residual
+    // risk needs two independent requests to hit blind backends while a third hits
+    // a healthy one. Two extra round-trips, paid once per completed backfill.
+    if (result.length === 0 && opts.before !== undefined) {
+      await this.assertCursorKnown(opts.before);
+      result = await this.fetchSignaturePage(address, opts);
     }
 
     return {
@@ -128,6 +131,32 @@ export class JsonRpcAdapter implements RpcPort {
       nextBefore:
         result.length === 0 ? null : (result[result.length - 1]!.signature as Signature),
     };
+  }
+
+  private async fetchSignaturePage(
+    address: Address,
+    opts: { readonly before?: Signature; readonly limit: number },
+  ): Promise<ReadonlyArray<{ signature: string; slot: number; blockTime: number | null; err: unknown }>> {
+    const result = (await this.call('getSignaturesForAddress', [
+      address,
+      {
+        limit: opts.limit,
+        commitment: 'confirmed',
+        ...(opts.before ? { before: opts.before } : {}),
+      },
+    ])) as ReadonlyArray<{ signature: string; slot: number; blockTime: number | null; err: unknown }>;
+
+    if (!Array.isArray(result)) {
+      // A misconfigured proxy or an arbitrary user-pasted endpoint can answer with
+      // null or an object. Label the error so the settings-screen copy can say "your
+      // endpoint is the problem" instead of surfacing an anonymous TypeError.
+      throw new RpcResponseError(
+        this.endpointLabel,
+        0,
+        `malformed getSignaturesForAddress result: ${result === null ? 'null' : typeof result}`,
+      );
+    }
+    return result;
   }
 
   /**
@@ -155,14 +184,47 @@ export class JsonRpcAdapter implements RpcPort {
         if (out.length > 0) return out;
         throw error;
       }
+      // A null result means THIS NODE does not serve the transaction (a lagging
+      // backend behind a load balancer, retention limits) -- not that it does not
+      // exist: getSignaturesForAddress just listed it. It must NOT be returned as
+      // fetched, or the caller would count it hydrated and durably checkpoint past
+      // a payment that was never obtained -- a permanent silent hole in the ledger.
+      // Omitted, it stays in the caller's shortfall (missingSignatures) and is
+      // retried, on this endpoint and then on the next.
+      if (raw === null) continue;
       out.push({
         signature,
-        slot: raw?.slot ?? 0,
-        blockTime: (raw?.blockTime ?? null) as UnixSeconds | null,
+        slot: raw.slot ?? 0,
+        blockTime: (raw.blockTime ?? null) as UnixSeconds | null,
         raw,
       });
     }
     return out;
+  }
+
+  /**
+   * Ask the endpoint whether it can see `before` at all; throw if it cannot.
+   *
+   * getSignatureStatuses with searchTransactionHistory consults the same long-term
+   * storage getSignaturesForAddress pages from, so "status: null" here means the
+   * empty page reflected blindness, not the address's history ending. Note this
+   * confirms the endpoint POOL, not necessarily the backend that served the empty
+   * page -- which is why getSignatures also requires the empty page to reproduce.
+   */
+  private async assertCursorKnown(before: Signature): Promise<void> {
+    const statuses = (await this.call('getSignatureStatuses', [
+      [before],
+      { searchTransactionHistory: true },
+    ])) as { value?: readonly unknown[] } | null;
+    const status = Array.isArray(statuses?.value) ? statuses.value[0] : undefined;
+    if (status === null || status === undefined) {
+      throw new RpcResponseError(
+        this.endpointLabel,
+        0,
+        'empty signature page, but the paging cursor is unknown to this endpoint -- ' +
+          'refusing to declare history exhausted',
+      );
+    }
   }
 
   private async call(method: string, params: readonly unknown[]): Promise<unknown> {

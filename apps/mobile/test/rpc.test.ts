@@ -94,7 +94,11 @@ describe('JsonRpcAdapter.getSignatures', () => {
   });
 
   it('passes the before cursor, limit, and confirmed commitment on the wire', async () => {
-    const calls = stubFetch(() => ok([]));
+    const calls = stubFetch((body) =>
+      (body as { method?: string }).method === 'getSignatureStatuses'
+        ? ok({ value: [{ slot: 9 }] })
+        : ok([]),
+    );
     await new JsonRpcAdapter('https://rpc.test', 'test').getSignatures(ADDRESS, {
       before: sig(9),
       limit: 500,
@@ -104,6 +108,73 @@ describe('JsonRpcAdapter.getSignatures', () => {
       method: 'getSignaturesForAddress',
       params: [ADDRESS, { before: 'sig-9', limit: 500, commitment: 'confirmed' }],
     });
+  });
+
+  it('trusts an empty page mid-backfill only if the cursor is known AND the empty page reproduces', async () => {
+    // An empty page durably ends the backfill (the driver writes complete:true), so
+    // "no more history" from a node that merely cannot SEE the cursor -- a lagging
+    // balancer sibling, a user RPC with short retention -- must throw instead.
+    const calls = stubFetch((body) =>
+      (body as { method?: string }).method === 'getSignatureStatuses'
+        ? ok({ value: [{ slot: 9, confirmationStatus: 'finalized' }] })
+        : ok([]),
+    );
+    const page = await new JsonRpcAdapter('https://rpc.test', 'test').getSignatures(ADDRESS, {
+      before: sig(9),
+      limit: 1000,
+    });
+    expect(page.signatures).toHaveLength(0);
+    expect(page.nextBefore).toBeNull();
+    // gSFA (empty) -> status check -> gSFA again (exhaustion must reproduce).
+    expect(calls.map((c) => (c.body as { method: string }).method)).toEqual([
+      'getSignaturesForAddress',
+      'getSignatureStatuses',
+      'getSignaturesForAddress',
+    ]);
+    expect(calls[1]!.body).toMatchObject({
+      method: 'getSignatureStatuses',
+      params: [['sig-9'], { searchTransactionHistory: true }],
+    });
+
+    stubFetch((body) =>
+      (body as { method?: string }).method === 'getSignatureStatuses'
+        ? ok({ value: [null] })
+        : ok([]),
+    );
+    const error = await new JsonRpcAdapter('https://rpc.test', 'failover')
+      .getSignatures(ADDRESS, { before: sig(9), limit: 1000 })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RpcResponseError);
+    expect((error as RpcResponseError).message).toMatch(/cursor is unknown/);
+  });
+
+  it('a lagging backend behind a load balancer is self-corrected: the retry answer wins', async () => {
+    // Split routing: the first gSFA hits a backend blind to the cursor (empty), the
+    // status check hits a healthy sibling (cursor known). Blindly trusting the
+    // empty page here would truncate the books; the retry reaches a healthy backend
+    // and its REAL history is what gets served.
+    let gsfaCalls = 0;
+    stubFetch((body) => {
+      const method = (body as { method?: string }).method;
+      if (method === 'getSignatureStatuses') return ok({ value: [{ slot: 9 }] });
+      gsfaCalls += 1;
+      return gsfaCalls === 1 ? ok([]) : ok([wireSig(1)]);
+    });
+    const page = await new JsonRpcAdapter('https://rpc.test', 'test').getSignatures(ADDRESS, {
+      before: sig(9),
+      limit: 1000,
+    });
+    expect(page.signatures.map((s) => s.signature)).toEqual([sig(1)]);
+    expect(page.nextBefore).toBe(sig(1));
+  });
+
+  it('a fresh backfill (no cursor) takes an empty page at face value -- no extra round-trip', async () => {
+    const calls = stubFetch(() => ok([]));
+    const page = await new JsonRpcAdapter('https://rpc.test', 'test').getSignatures(ADDRESS, {
+      limit: 1000,
+    });
+    expect(page.nextBefore).toBeNull();
+    expect(calls).toHaveLength(1);
   });
 
   it('marks failed transactions via the err field', async () => {
@@ -224,10 +295,16 @@ describe('JsonRpcAdapter.getTransactions', () => {
     ).rejects.toBeInstanceOf(RateLimitedError);
   });
 
-  it('a null result (pruned transaction) still yields an envelope with raw null', async () => {
-    stubFetch(() => ok(null));
-    const [tx] = await new JsonRpcAdapter('https://rpc.test', 'test').getTransactions([sig(1)]);
-    expect(tx).toMatchObject({ signature: sig(1), slot: 0, blockTime: null, raw: null });
+  it('a null result (transaction unknown to this node) is OMITTED, never counted as fetched', async () => {
+    // Wrapping the null would let the hydration pipeline mark the signature done
+    // and durably checkpoint past a payment that was never obtained. Omitted, it
+    // stays in missingSignatures and is retried here and on the next endpoint.
+    stubFetch((_body, call) => (call === 1 ? ok(null) : ok({ slot: 7, blockTime: null })));
+    const txs = await new JsonRpcAdapter('https://rpc.test', 'test').getTransactions([
+      sig(1),
+      sig(2),
+    ]);
+    expect(txs.map((t) => t.signature)).toEqual([sig(2)]);
   });
 });
 
