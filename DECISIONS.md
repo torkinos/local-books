@@ -217,6 +217,14 @@ gets revised before anything is built on top of it.
 > **Confirmed by S1 (2026-08-23).** The driver absorbed mainnet-beta's server-advised
 > 10 s backoffs and resumed exactly-once after two different crash shapes, unmodified
 > (`spikes/01-rpc-backfill.md`). Status: accepted.
+>
+> **Amended 2026-08-23 (T6 review): the durability handshake.** The driver originally
+> persisted the checkpoint *before* yielding the page — an Android kill between the
+> two left a permanent hole in history (cursor advanced past data the caller never
+> stored). Now the checkpoint is written only when the consumer pulls the *next*
+> item, i.e. after its loop body persisted the page. A page not followed by another
+> pull is re-fetched on resume; dedup absorbs the replay. Replay is recoverable,
+> holes are not. Pinned by two tests in `backfill.test.ts`.
 
 ## D9 — Endpoint order is fixed (publicnode → mainnet-beta → user RPC), no JSON-RPC batching
 
@@ -289,3 +297,28 @@ sync, and the driver's checkpoint makes the retry safe.
 
 **Revisit if:** v2 needs signing or websockets (it must not — watch-only forever), or
 an RPC provider requires a non-JSON-RPC transport.
+
+## D12 — The SQLCipher key is never re-minted over existing books
+
+**Date:** 2026-08-23 · **Status:** accepted — from adversarial review of T6
+
+SecureStore can return null on a device that HAS books: Android Auto Backup restores
+app data but never Keystore entries; a lock-screen change can invalidate the Keystore.
+Treating "no key" as "first launch" would overwrite the entry with a fresh key and
+make the books permanently undecryptable, silently — the worst failure available to
+this app.
+
+So key provisioning is recorded **out-of-band**, in a tiny plain (unencrypted,
+secret-free) meta database: the fact that a key exists plus a SHA-256 fingerprint of
+it, written only after the encrypted DB first opens successfully. On launch:
+
+- no key + no marker → genuine first run → mint and store;
+- no key + marker → **`KeyLostError`**, surfaced to the user. Starting over requires
+  explicitly deleting the old database; the app never does it on its own;
+- key + marker with a different fingerprint → `KeyLostError('mismatch')`, same rule.
+
+The key is stored `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` — background sync works after
+boot, and the entry never migrates in a backup, which makes the restore behaviour
+deterministic (the marker catches it) instead of platform-dependent. `isSQLCipher()`
+is asserted at open, so a build that lost the SQLCipher flag fails loudly rather than
+writing plaintext books (D1).

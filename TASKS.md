@@ -47,22 +47,30 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > self-check, tests) and badge in README. Remaining: push and watch the first remote
 > run go green, then enable branch protection so red blocks.
 
-### `[~]` T5 · Expo prebuild + dev client on a physical Android device
+### `[x]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
 **Accept:** the app launches on a real Android phone and renders a placeholder screen;
 the pinned SDK version is written into DECISIONS.md.
 > **2026-08-23:** scaffold complete — SDK 57 pinned (recorded under D2), monorepo
 > metro config, placeholder screen that calls `@local-books/core` (bigint on Hermes
-> proof), telemetry off in every script; typechecks in the workspace. Remaining, on
-> your machine: `npm run prebuild` + `npm run android` with a phone attached — the
-> sandbox filesystem cannot extract the native template (its `android/` is gitignored
-> and regenerated per machine anyway).
+> proof), telemetry off in every script.
+> **Done:** verified on a physical Android device — app launches and renders the
+> placeholder (user-confirmed). W1 is now fully closed.
 
-### `[ ]` T6 · op-sqlite + SQLCipher behind `StoragePort`
+### `[~]` T6 · op-sqlite + SQLCipher behind `StoragePort`
 Wire op-sqlite with SQLCipher; key from `expo-secure-store`. Nothing in core imports it.
 **Accept:** the app opens an encrypted DB, writes and reads a row across a restart;
 inspecting the DB file with plain `sqlite3` fails to open it. Lint still passes (proving
 core never learned SQLite exists).
+> **2026-08-23:** code half done and review-hardened — SQL layer tested against real
+> SQLite (11 storage tests incl. restart-from-disk and core `rebuild()` against the
+> real adapter); serialized port calls (concurrent-transaction corruption
+> demonstrated, then fixed); key-loss rule per D12 (never re-mint over existing
+> books); `isSQLCipher()` asserted; corrupted rows fail with table+row named. The
+> same review fixed the CORE driver: checkpoint now written only after the consumer
+> acknowledged the page (D8 amendment — no more silent history holes on process
+> kill). **Remaining on device:** encrypted file unreadable by plain `sqlite3`;
+> physical restart through the op-sqlite binding.
 
 ### `[x]` T7 · Telemetry off (D5)
 Disable Expo/EAS analytics; no crash reporter.

@@ -155,22 +155,32 @@ export async function* backfillAddress(
     // syncs stop.
     const newestSeen = checkpoint.newestSeen ?? page.signatures[0]!.signature;
 
-    checkpoint = {
+    const advanced: BackfillCheckpoint = {
       ...checkpoint,
       newestSeen,
       oldestSeen: page.nextBefore,
       complete: page.nextBefore === null,
       updatedAt: clock.now(),
     };
-    await storage.putCheckpoint(checkpoint);
 
+    // Yield FIRST, checkpoint AFTER control returns. Generator semantics make this
+    // the durability handshake: the consumer's loop body (persist this page's
+    // signatures/events) runs to completion before it pulls the next item, and only
+    // that pull executes the putCheckpoint below. So the cursor never durably
+    // advances past data the caller has not stored -- a kill mid-processing replays
+    // the page (dedup absorbs it), which is recoverable; advancing first would leave
+    // a permanent hole in the ledger, which is not. A page consumed but never
+    // followed by another pull is deliberately un-checkpointed for the same reason.
     yield {
       kind: 'page',
       signatures: page.signatures,
-      checkpoint,
+      checkpoint: advanced,
       pauseMs: options.basePaceMs,
       pagesFetched,
     };
+
+    checkpoint = advanced;
+    await storage.putCheckpoint(checkpoint);
 
     if (checkpoint.complete) {
       yield { kind: 'done', checkpoint, reason: 'history-exhausted' };

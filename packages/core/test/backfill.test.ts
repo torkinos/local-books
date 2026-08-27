@@ -78,11 +78,15 @@ describe('backfillAddress', () => {
     const firstRpc = new FakeRpc([
       page([sigInfo(5), sigInfo(4)], sig(4)),
       page([sigInfo(3), sigInfo(2)], sig(2)),
+      page([sigInfo(1)], null),
     ]);
 
-    // Simulate the process dying after one page: pull exactly one value, then stop.
+    // The durability handshake: a page's checkpoint is written only when the consumer
+    // pulls AGAIN -- i.e. after its loop body persisted the page's data. Pull page 1,
+    // pull once more (acknowledging page 1), then die.
     const gen = backfillAddress(ADDRESS, { rpc: firstRpc, storage, clock: fixedClock() }, OPTIONS);
-    await gen.next();
+    await gen.next(); // page 1 handed over
+    await gen.next(); // consumer came back for more => page 1 was persisted => checkpoint lands
     await gen.return(undefined);
 
     expect((await storage.getCheckpoint(ADDRESS))?.oldestSeen).toBe(sig(4));
@@ -95,6 +99,26 @@ describe('backfillAddress', () => {
 
     expect(secondRpc.calls[0]?.before).toBe(sig(4));
     expect(progress.at(-1)).toMatchObject({ kind: 'done', reason: 'history-exhausted' });
+  });
+
+  it('never durably advances the cursor past a page the consumer did not acknowledge', async () => {
+    // The other half of the handshake: die BEFORE pulling again (i.e. before the
+    // consumer stored the page) and the checkpoint must be untouched -- the page is
+    // re-fetched on resume and dedup absorbs the replay. Checkpointing first would
+    // skip data forever: a silent hole in income history, invisible to the user.
+    const storage = new FakeStorage();
+    const rpc = new FakeRpc([page([sigInfo(5), sigInfo(4)], sig(4))]);
+
+    const gen = backfillAddress(ADDRESS, { rpc, storage, clock: fixedClock() }, OPTIONS);
+    await gen.next(); // page handed over, but the consumer dies while processing it
+    await gen.return(undefined);
+
+    expect(await storage.getCheckpoint(ADDRESS)).toBeNull();
+
+    // Resume starts from the tip and re-fetches the same page.
+    const resumeRpc = new FakeRpc([page([sigInfo(5), sigInfo(4)], sig(4)), page([], null)]);
+    await drain(backfillAddress(ADDRESS, { rpc: resumeRpc, storage, clock: fixedClock() }, OPTIONS));
+    expect(resumeRpc.calls[0]?.before).toBeUndefined();
   });
 
   it('does not re-walk history once an address is complete', async () => {
