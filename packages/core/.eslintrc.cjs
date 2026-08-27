@@ -28,7 +28,7 @@ const RESTRICTED_PATTERNS = [
     message: 'core is platform-free (PROJECT.md line 61). Keep Expo in apps/mobile.',
   },
   {
-    group: ['@op-engineering/*'],
+    group: ['@op-engineering/*', 'better-sqlite3', 'expo-sqlite', '*sqlite*'],
     message: 'core does not know about SQLite. Persist through StoragePort.',
   },
   {
@@ -43,6 +43,7 @@ const RESTRICTED_PATTERNS = [
 const NODE_BUILTINS = [
   'fs', 'path', 'os', 'net', 'http', 'https', 'crypto', 'child_process',
   'worker_threads', 'stream', 'zlib', 'dns', 'tls', 'cluster', 'perf_hooks',
+  'sqlite',
 ];
 
 module.exports = {

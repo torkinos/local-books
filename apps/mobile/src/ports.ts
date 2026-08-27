@@ -13,4 +13,7 @@ export const referenceKeys = makeReferenceKeyPort((length) =>
   getRandomValues(new Uint8Array(length)),
 );
 
+// StoragePort (T6): encrypted SQLite. Async because first open provisions the key.
+export { openEncryptedStorage, KeyLostError } from './storage/opsqlite.js';
+
 export { mainnetEndpoints, devnetEndpoints };
