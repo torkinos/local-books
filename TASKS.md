@@ -179,11 +179,24 @@ no reference (the tier-b gap, asserted as a passing test); ignores failed transa
 ignores outgoing; keeps two transfers in one transaction distinct; still matches when the
 client underpays, flagging the shortfall separately.
 
-### `[ ]` T15 · Minimal UI: add address + ledger list
+### `[~]` T15 · Minimal UI: add address + ledger list
 Two screens. Paste an address, label it, watch backfill progress; a ledger list of
 events with direction, amount, counterparty, date.
 **Accept:** works on a physical device against devnet; backfill progress is visible and
 survives backgrounding the app.
+> **2026-08-27:** code half done. (1) App-side **sync engine**
+> (`apps/mobile/src/sync/engine.ts`, D13): drives core's D8 generators, hydrates with
+> shortfall retry via `missingSignatures`, rotates endpoints per D9, persists every
+> chunk BEFORE the checkpoint-advancing pull, abandons unpersistable pages without
+> pulling. (2) Both screens + `App.tsx` orchestration: add-address with base58/32-byte
+> validation; ledger with per-address progress (honest counts, no fake percentages);
+> sync on open, foreground, pull-to-refresh, and a 30 s foreground timer — no
+> real-time claim anywhere. 53 new tests incl. an exact D8-interleaving assertion and
+> a resume-after-cancel replay test. Two adversarial workflow rounds (21 agents)
+> confirmed and fixed five real data-loss bugs — recorded under D8 (two watermark
+> rules), D11 (two wire-trust rules, verified against live devnet), and D13 (engine
+> policy). **Remaining on device:** run both screens against devnet on the physical
+> phone — backfill progress visible, survives backgrounding.
 
 ### `[ ]` T16 · **Demo path end-to-end on devnet**
 Add address → pay with a Solana Pay transfer request → detected → matched → visible.

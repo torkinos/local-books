@@ -225,6 +225,19 @@ gets revised before anything is built on top of it.
 > item, i.e. after its loop body persisted the page. A page not followed by another
 > pull is re-fetched on resume; dedup absorbs the replay. Replay is recoverable,
 > holes are not. Pinned by two tests in `backfill.test.ts`.
+>
+> **Amended 2026-08-27 (sync-engine review): two watermark rules.** (1) An
+> incremental run that exhausts its page budget *before reaching the stored
+> watermark* must not advance the watermark — that would jump it over signatures
+> never fetched, a permanent hole reported as success. It now reopens the checkpoint
+> (`complete: false`, `oldestSeen` = the paging cursor) and reports
+> `page-budget-reached`, converting the unwalked gap into a resumable backfill;
+> replay below the old watermark is absorbed by dedup. (2) `complete` with no
+> `newestSeen` means "the address was empty when walked", not "never look again":
+> the next incremental reopens it, so a freshly created wallet's first-ever payment
+> lands instead of the address freezing forever (this would have bricked the T16
+> demo shape — watch a new wallet, then pay it). Both pinned in `backfill.test.ts`;
+> `BackfillCheckpoint.complete` is documented as NOT a one-way latch.
 
 ## D9 — Endpoint order is fixed (publicnode → mainnet-beta → user RPC), no JSON-RPC batching
 
@@ -298,6 +311,23 @@ sync, and the driver's checkpoint makes the retry safe.
 **Revisit if:** v2 needs signing or websockets (it must not — watch-only forever), or
 an RPC provider requires a non-JSON-RPC transport.
 
+> **Amended 2026-08-27 (sync-engine review): two wire-trust rules.** (1) An empty
+> signature page while paging with a `before` cursor is trusted only after the
+> endpoint confirms it knows that cursor (`getSignatureStatuses` with
+> `searchTransactionHistory`) **and** the empty page reproduces on a second ask —
+> the endpoint is a pool, and the confirmation can come from a healthy sibling of
+> the lagging backend that served the empty page; the retry both detects the split
+> and self-corrects it (a healthy backend's answer is served instead). Otherwise
+> the adapter throws and the engine rotates. Verified against live devnet: a real
+> node answers an unknown cursor with an *empty page* — exactly the shape that
+> would have durably marked a backfill `complete:true` and silently truncated the
+> books. (2) A null `getTransaction` result — this node does not serve that
+> transaction, though `getSignaturesForAddress` just listed it — is OMITTED from
+> the returned batch, never wrapped as fetched. Wrapped, the engine counted it
+> hydrated and checkpointed past a payment it never obtained; omitted, it stays in
+> `missingSignatures` and is retried on this endpoint and then the next. Pinned in
+> `rpc.test.ts` and live in `rpc.devnet.integration.test.ts`.
+
 ## D12 — The SQLCipher key is never re-minted over existing books
 
 **Date:** 2026-08-23 · **Status:** accepted — from adversarial review of T6
@@ -322,3 +352,45 @@ boot, and the entry never migrates in a backup, which makes the restore behaviou
 deterministic (the marker catches it) instead of platform-dependent. `isSQLCipher()`
 is asserted at open, so a build that lost the SQLCipher flag fails loudly rather than
 writing plaintext books (D1).
+
+## D13 — Sync engine: one endpoint cursor, and a page that cannot persist is abandoned, never pulled past
+
+**Date:** 2026-08-27 · **Status:** accepted
+
+The app-side sync engine (`apps/mobile/src/sync/engine.ts`) consumes D8's generators
+and makes three policy decisions core cannot:
+
+1. **One endpoint cursor for both paging and hydration.** Failover (D9) applies to
+   the *run*, not the request: when either paging (`failover-needed`, a transport
+   error) or hydration (`maxConsecutiveRateLimits` zero-progress 429s, a chunk the
+   endpoint knows nothing of) exhausts an endpoint, the whole run moves to the next
+   one, recreating the generator from the stored checkpoint — which makes the
+   restart seamless. When the ordered list runs out, the run ends
+   `endpoints-exhausted`: surfaced to the user, retried on the next open / refresh /
+   poll, with the user-supplied RPC URL (PROJECT.md line 72) as the first remedy in
+   the copy.
+
+2. **Persist-then-pull, and abandon on failure.** Hydration persists each chunk
+   (25 signatures — progress-reporting and cancellation granularity, NOT a JSON-RPC
+   batch; D9 still forbids those) as it lands. A page that cannot fully hydrate is
+   abandoned WITHOUT pulling the next generator item, so the checkpoint stays behind
+   it (D8); the partial progress is kept, and the replay hydrates only the shortfall
+   (`missingSignatures`). Replay is recoverable; a checkpoint past unstored data is
+   not.
+
+3. **Errors rotate only if they indict the endpoint.** `RateLimitedError`,
+   `RpcHttpError`, `RpcResponseError`, network-message `TypeError`s, and timeouts
+   rotate; everything else — storage corruption, programming errors — propagates.
+   Retrying a broken disk against a different RPC server would only bury it. A
+   plain `TypeError` is NOT sufficient: on Hermes every
+   "cannot read property of undefined" is one, so only the known network messages
+   qualify.
+
+Sync scheduling is PROJECT.md line 62 verbatim: on open, on returning to the
+foreground, on pull-to-refresh, and a 30 s foreground timer. Never a real-time
+promise; progress is counts, never an invented percentage (total history size is
+unknown until the walk completes).
+
+**Revisit if:** the background task (T29's periodic Android sync) needs finer budget
+control than the `page-budget-reached` hand-back provides, or if a future RPC
+adapter's error taxonomy stops mapping onto the rotate/propagate split.

@@ -72,10 +72,14 @@ export interface RpcPort {
   ): Promise<SignaturePage>;
 
   /**
-   * Fetch full transactions, in order. May return FEWER than requested: an adapter
-   * that hits throttling or a network failure mid-batch returns what it fetched so
-   * far instead of discarding paid-for round-trips -- callers detect the shortfall
-   * with `missingSignatures` and retry the remainder later. A failure with zero
+   * Fetch full transactions, in order. May return FEWER than requested, for two
+   * reasons: an adapter that hits throttling or a network failure mid-batch returns
+   * what it fetched so far instead of discarding paid-for round-trips, and a
+   * transaction the serving node does not know (null result) is OMITTED rather than
+   * returned as an empty shell -- returning it would let the caller count it as
+   * hydrated and durably checkpoint past a payment that was never obtained. Callers
+   * detect both shortfalls with `missingSignatures` and retry the remainder later
+   * (rotating endpoints if this one keeps coming up empty). A failure with zero
    * progress throws (RateLimitedError for throttling), so a caller getting nothing
    * still sees why.
    */
@@ -137,7 +141,14 @@ export interface BackfillCheckpoint {
   readonly oldestSeen: Signature | null;
   /** Newest signature ever ingested. Incremental sync stops when it reaches this. */
   readonly newestSeen: Signature | null;
-  /** True once history has been walked to genesis; initial backfill never repeats. */
+  /**
+   * True when the walk has exhausted known history. NOT a one-way latch:
+   * syncNewSignatures deliberately resets it to false when it was recorded with no
+   * newestSeen (the address had zero history at first walk -- its first payment
+   * must still land) and when an incremental run exhausts its page budget mid-gap
+   * (the unwalked remainder becomes a resumable backfill). Consumers re-read it
+   * every run; never cache derived state keyed on complete:true.
+   */
   readonly complete: boolean;
   readonly updatedAt: UnixSeconds;
 }
