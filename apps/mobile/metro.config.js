@@ -20,4 +20,20 @@ config.resolver.nodeModulesPaths = [
   path.join(workspaceRoot, 'node_modules'),
 ];
 
+// The workspace TS sources use NodeNext ESM specifiers ("./types/index.js")
+// which Metro won't map back to .ts on its own. For relative imports coming
+// from a TS file, drop the ".js" so Metro's sourceExts (ts, tsx, js, ...)
+// resolve the real file. Package subpaths like "@noble/hashes/sha2.js" are
+// untouched — they point at real .js files via package exports.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    moduleName.startsWith('.') &&
+    moduleName.endsWith('.js') &&
+    /\.tsx?$/.test(context.originModulePath)
+  ) {
+    moduleName = moduleName.slice(0, -'.js'.length);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
