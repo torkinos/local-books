@@ -81,6 +81,19 @@ export function formatUnits(raw: bigint, decimals: number): string {
   return `${negative ? '-' : ''}${whole}${fraction}`;
 }
 
+/**
+ * formatUnits with trailing fraction zeros trimmed: `1_000_000n` at 6 -> `"1"`,
+ * `1_500_000n` -> `"1.5"`. For display and for Solana Pay URLs, where `amount=1`
+ * and `amount=1.000000` are the same value but only one reads like a price tag.
+ * Built from the exact digits -- never exponent notation, never a float.
+ */
+export function formatUnitsTrimmed(raw: bigint, decimals: number): string {
+  const exact = formatUnits(raw, decimals);
+  if (!exact.includes('.')) return exact;
+  const trimmed = exact.replace(/\.?0+$/, '');
+  return trimmed === '' || trimmed === '-' ? '0' : trimmed;
+}
+
 /** Decimal string -> smallest-unit bigint. Throws rather than truncating silently. */
 export function parseUnits(value: string, decimals: number): bigint {
   const match = /^(-?)(\d+)(?:\.(\d*))?$/.exec(value.trim());
