@@ -27,6 +27,15 @@ export function formatTokenAmount(amount: TokenAmount): string {
   return `${value} tokens (${shortAddress(amount.mint)})`;
 }
 
+/** Due dates are day-granular: local calendar date, no time of day. */
+export function formatDueDate(dueDate: UnixSeconds): string {
+  return new Date(dueDate * 1000).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 /**
  * Block time -> a local calendar date + time. Old transactions can lack blockTime
  * (the RPC stops serving it); say so instead of inventing a date.
