@@ -32,6 +32,9 @@ export { sortOps, dedupOps, makeOpId, stableStringify, opsAsOf } from './oplog/i
 
 export { invoiceTotal, InvalidLineItemError } from './invoice/index.js';
 
+export { transferRequestUrl } from './pay/index.js';
+export type { TransferRequest } from './pay/index.js';
+
 export { matchByReference, amountAgreement } from './match/index.js';
 export type { MatchCandidate, MatchTier, HeuristicMatchInput, HeuristicMatcher } from './match/index.js';
 
@@ -48,6 +51,7 @@ export {
   valueAtReceipt,
   isStable,
   formatUnits,
+  formatUnitsTrimmed,
   parseUnits,
   multiplyDecimals,
   STABLE_MINTS,
