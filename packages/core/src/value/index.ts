@@ -22,6 +22,11 @@ import type { FiatCode, TokenAmount, UnixSeconds, Valuation } from '../types/ind
 export const STABLE_MINTS: ReadonlyMap<string, string> = new Map([
   ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'USDC'],
   ['Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', 'USDT'],
+  // Circle's devnet USDC: the T16/T22 demo and W4's "month of devnet income exports
+  // to CSV" both run on devnet, so devnet USDC must value 1:1 like its mainnet
+  // sibling. Harmless on mainnet -- mint addresses are globally unique keys and this
+  // one only exists on devnet.
+  ['4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 'USDC'],
 ]);
 
 export function isStable(amount: TokenAmount): boolean {

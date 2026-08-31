@@ -11,13 +11,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import type { Address, ChainEvent, StoragePort, WatchedAddressView } from '@local-books/core';
-import { dedupEvents, project, sortByRecency } from '@local-books/core';
-import { clock, openEncryptedStorage, rpcEndpoints, KeyLostError } from './ports.js';
-import { addressWatchedOp } from './ops.js';
+import type {
+  Address,
+  ChainEvent,
+  InvoiceView,
+  Op,
+  StoragePort,
+  WatchedAddressView,
+} from '@local-books/core';
+import { dedupEvents, project, sortByRecency, withOverdue } from '@local-books/core';
+import { clock, openEncryptedStorage, referenceKeys, rpcEndpoints, KeyLostError } from './ports.js';
+import { addressWatchedOp, invoiceCreatedOp } from './ops.js';
+import { autoMatchOps } from './matching.js';
 import { syncAddress } from './sync/engine.js';
 import type { SyncResult } from './sync/engine.js';
 import { AddAddressScreen } from './ui/AddAddressScreen.js';
+import type { CreateInvoiceSubmission } from './ui/CreateInvoiceScreen.js';
+import { CreateInvoiceScreen } from './ui/CreateInvoiceScreen.js';
+import { InvoicesScreen } from './ui/InvoicesScreen.js';
 import { LedgerScreen } from './ui/LedgerScreen.js';
 import type { AddressSyncState } from './ui/syncStatus.js';
 
@@ -29,6 +40,7 @@ const REFRESH_THROTTLE_MS = 2_000;
 interface Books {
   readonly watched: readonly WatchedAddressView[];
   readonly events: readonly ChainEvent[];
+  readonly invoices: readonly InvoiceView[];
 }
 
 type Boot =
@@ -82,14 +94,18 @@ function BootFailure({ error }: { readonly error: unknown }): React.JSX.Element 
 }
 
 function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element {
-  const [screen, setScreen] = useState<'ledger' | 'add'>('ledger');
-  const [books, setBooks] = useState<Books>({ watched: [], events: [] });
+  const [screen, setScreen] = useState<'ledger' | 'add' | 'invoices' | 'create-invoice'>('ledger');
+  const [books, setBooks] = useState<Books>({ watched: [], events: [], invoices: [] });
   const [syncStates, setSyncStates] = useState<ReadonlyMap<Address, AddressSyncState>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
+  // A failed refresh must not present as empty books: the ledger renders this as a
+  // banner (StorageCorruptionError's message names the bad table+row on purpose).
+  const [booksError, setBooksError] = useState<string | null>(null);
 
   const watchedRef = useRef<readonly WatchedAddressView[]>([]);
   const runningRef = useRef(new Set<Address>());
   const lastRefreshRef = useRef(0);
+  const refreshQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const setSyncState = useCallback((address: Address, state: AddressSyncState): void => {
     setSyncStates((current) => {
@@ -99,25 +115,62 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
     });
   }, []);
 
-  /** Re-read ops + events from storage into view state. */
-  const refreshBooks = useCallback(async (): Promise<void> => {
-    const ops = await storage.readOps();
-    const watched = project(ops, []).watchedAddresses;
-    const events: ChainEvent[] = [];
-    for (const view of watched) {
-      // Plain loop, not push(...spread): a busy address exceeds the argument limit
-      // (same reasoning as core's rebuild()).
-      for (const event of await storage.getChainEvents(view.address)) events.push(event);
+  /**
+   * Re-read ops + events from storage into view state, auto-matching on the way.
+   *
+   * Tier-a matching runs here so a payment matches the moment it lands, whichever
+   * path loaded it (sync progress, pull-to-refresh, invoice creation against an
+   * already-ingested deposit). autoMatchOps only ever emits ops whose application
+   * removes their own candidates, so one extra fold settles it -- no loop.
+   *
+   * Serialized: two overlapping refreshes (sync progress + pull-to-refresh) would
+   * both read ops before either appends its matches and record the same decision
+   * twice. Duplicates are harmless to the projection (same invoice+event key), but
+   * an audit log that says one confirmation happened twice is still a worse log.
+   */
+  const refreshBooks = useCallback((): Promise<void> => {
+    const run = refreshQueueRef.current.then(() => refreshBooksInner(), () => refreshBooksInner());
+    refreshQueueRef.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+
+    async function refreshBooksInner(): Promise<void> {
+      const ops = await storage.readOps();
+      const watched = project(ops, []).watchedAddresses;
+      const events: ChainEvent[] = [];
+      for (const view of watched) {
+        // Plain loop, not push(...spread): a busy address exceeds the argument limit
+        // (same reasoning as core's rebuild()).
+        for (const event of await storage.getChainEvents(view.address)) events.push(event);
+      }
+
+      let allOps: readonly Op[] = ops;
+      let projection = project(allOps, events);
+      const matches = autoMatchOps(projection, clock.now());
+      if (matches.length > 0) {
+        await storage.appendOps(matches);
+        allOps = [...ops, ...matches];
+        projection = project(allOps, events);
+      }
+
+      watchedRef.current = watched;
+      lastRefreshRef.current = Date.now();
+      setBooksError(null);
+      setBooks({
+        watched,
+        // Failed transactions moved no money; they stay in the store as chain facts
+        // but are not ledger rows (same rule as projection's unmatched list).
+        events: sortByRecency(dedupEvents(events)).filter((event) => event.succeeded),
+        invoices: withOverdue(projection, clock.now()).invoices,
+      });
     }
-    watchedRef.current = watched;
-    lastRefreshRef.current = Date.now();
-    setBooks({
-      watched,
-      // Failed transactions moved no money; they stay in the store as chain facts
-      // but are not ledger rows (same rule as projection's unmatched list).
-      events: sortByRecency(dedupEvents(events)).filter((event) => event.succeeded),
-    });
   }, [storage]);
+
+  const surfaceBooksError = useCallback((error: unknown): void => {
+    setBooksError(error instanceof Error ? error.message : String(error));
+  }, []);
 
   /** One full sync for one address; loops while the driver hits its page budget. */
   const syncOne = useCallback(
@@ -137,7 +190,9 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
               // hydration loop does not thrash the list.
               if (Date.now() - lastRefreshRef.current > REFRESH_THROTTLE_MS) {
                 lastRefreshRef.current = Date.now();
-                void refreshBooks();
+                // Best-effort mid-sync repaint; a persistent storage failure still
+                // surfaces through the awaited refresh in this loop's catch.
+                void refreshBooks().catch(() => undefined);
               }
             },
           });
@@ -162,8 +217,8 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
 
   // On launch: load what storage has, then check the chain.
   useEffect(() => {
-    void refreshBooks().then(syncAll);
-  }, [refreshBooks, syncAll]);
+    void refreshBooks().then(syncAll).catch(surfaceBooksError);
+  }, [refreshBooks, syncAll, surfaceBooksError]);
 
   // On returning to the foreground, and on a slow timer while visible.
   useEffect(() => {
@@ -183,8 +238,9 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
     setRefreshing(true);
     void refreshBooks()
       .then(syncAll)
+      .catch(surfaceBooksError)
       .finally(() => setRefreshing(false));
-  }, [refreshBooks, syncAll]);
+  }, [refreshBooks, syncAll, surfaceBooksError]);
 
   const onAddAddress = useCallback(
     async (address: Address, label: string): Promise<void> => {
@@ -194,6 +250,18 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
       void syncOne(address);
     },
     [storage, refreshBooks, syncOne],
+  );
+
+  const onCreateInvoice = useCallback(
+    async (submission: CreateInvoiceSubmission): Promise<void> => {
+      // The reference key is minted HERE, at creation, one per invoice (D7): random,
+      // unlinkable, and already the invoice's identity by the time anything renders.
+      const reference = await referenceKeys.generate();
+      await storage.appendOps([invoiceCreatedOp({ ...submission, reference }, clock.now())]);
+      await refreshBooks();
+      setScreen('invoices');
+    },
+    [storage, refreshBooks],
   );
 
   if (screen === 'add') {
@@ -209,6 +277,33 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
     );
   }
 
+  if (screen === 'invoices') {
+    return (
+      <View style={styles.root}>
+        <InvoicesScreen
+          invoices={books.invoices}
+          onCreate={() => setScreen('create-invoice')}
+          onBack={() => setScreen('ledger')}
+        />
+        <StatusBar style="auto" />
+      </View>
+    );
+  }
+
+  if (screen === 'create-invoice') {
+    return (
+      <View style={styles.root}>
+        <CreateInvoiceScreen
+          watched={books.watched}
+          now={clock.now()}
+          onSubmit={onCreateInvoice}
+          onCancel={() => setScreen('invoices')}
+        />
+        <StatusBar style="auto" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <LedgerScreen
@@ -216,8 +311,11 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
         events={books.events}
         syncStates={syncStates}
         refreshing={refreshing}
+        errorBanner={booksError}
         onRefresh={onRefresh}
         onAddAddress={() => setScreen('add')}
+        onOpenInvoices={() => setScreen('invoices')}
+        openInvoiceCount={books.invoices.filter((v) => v.status !== 'paid').length}
       />
       <StatusBar style="auto" />
     </View>

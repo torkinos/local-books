@@ -48,6 +48,23 @@ export interface ProjectionState {
   /** Chain events with no confirmed invoice match -- the "unexplained deposits" list. */
   readonly unmatchedEvents: readonly ChainEvent[];
   readonly categories: ReadonlyMap<string, string>;
+  /**
+   * Every (invoice, event) pairing a human has EVER rejected, as
+   * `${invoiceId}|${eventKey}` (see matchPairKey). A rejection is a compensating op
+   * (D4): it must not merely undo the confirm, it must stop the machine from
+   * re-proposing the same pair -- auto-matching consults this set so a rejected
+   * candidate never silently re-applies over the human's decision. A HUMAN may
+   * still re-confirm; only automation is barred.
+   */
+  readonly rejectedMatches: ReadonlySet<string>;
+}
+
+/** Key for a (invoice, event) pairing in `rejectedMatches`. */
+export function matchPairKey(
+  invoiceId: string,
+  event: { readonly signature: Signature; readonly instructionIndex: number },
+): string {
+  return `${invoiceId}|${eventKey(event)}`;
 }
 
 /**
@@ -68,6 +85,7 @@ export function project(
   const categories = new Map<string, string>();
   /** invoiceId -> eventKey -> PaymentRef. Keyed so reject can remove precisely. */
   const confirmed = new Map<string, Map<string, PaymentRef>>();
+  const rejected = new Set<string>();
 
   for (const op of ordered) {
     switch (op.type) {
@@ -101,6 +119,9 @@ export function project(
 
       case 'match-rejected':
         confirmed.get(op.invoiceId)?.delete(eventKey(op));
+        // Additive on purpose: "was ever rejected" survives later ops, so automation
+        // can never re-propose the pair. A later HUMAN confirm still lands above.
+        rejected.add(matchPairKey(op.invoiceId, op));
         break;
 
       case 'category-assigned':
@@ -132,6 +153,7 @@ export function project(
     // They stay in the event store (they are chain facts) but not in this list.
     unmatchedEvents: events.filter((e) => e.succeeded && !matchedKeys.has(eventKey(e))),
     categories,
+    rejectedMatches: rejected,
   };
 }
 

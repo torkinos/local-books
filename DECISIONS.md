@@ -394,3 +394,38 @@ unknown until the walk completes).
 **Revisit if:** the background task (T29's periodic Android sync) needs finer budget
 control than the `page-budget-reached` hand-back provides, or if a future RPC
 adapter's error taxonomy stops mapping onto the rotate/propagate split.
+
+## D14 — Auto-apply requires a conclusive chain answer: exact amount, one global claim, and no prior human rejection
+
+**Date:** 2026-08-31 · **Status:** accepted — two gates from adversarial review of T18
+
+PROJECT.md line 81 lets a *reference* match auto-confirm. The T18 review showed
+"carries the reference" is not the same as "the chain's answer is conclusive", so
+auto-apply (`apps/mobile/src/matching.ts`) passes four gates:
+
+1. **In-transaction unambiguity** (core, D10): the transaction admits exactly one
+   transfer-to-invoice pairing.
+2. **Pass-level unambiguity over EVERY claim.** Two on-chain payments claiming one
+   invoice is ambiguous no matter which of them is individually clean — the count
+   includes claims core already refused to auto-apply and claims a human rejected.
+   The review demonstrated a duplicate hiding inside an ambiguous batched settlement
+   silently laundering its clean twin into an auto-confirm when only auto-applicable
+   candidates were counted.
+3. **A rejected pair never auto-applies again.** `match-rejected` is a compensating
+   op (D4); the projection tracks every rejected `(invoice, event)` pair in
+   `rejectedMatches`, and automation re-confirming one would override a recorded
+   human decision. A human may still re-confirm by hand.
+4. **Exact amount, same mint.** Solana Pay lets the payer edit the amount before
+   signing, so without this gate the PAYER decides when the freelancer's books say
+   "paid" — a dust payment carrying the reference would settle a 1250 USDC invoice,
+   and there is no rejection UI yet to undo it. Under-, over-, and wrong-token
+   payments stay visible as unexplained deposits until a human books them
+   (`amountAgreement` exists precisely to label these in the confirm UI to come).
+
+**Cost:** legitimate partial payments and fee-shaved transfers are not auto-booked.
+Accepted: a human tap on a flagged candidate is cheap; un-ringing a wrong "paid" on
+a tax-relevant ledger is not.
+
+**Revisit if:** the W5 polish pass adds the confirm/reject UI — gates stay, but
+under/over candidates should then be *offered* with the shortfall labeled, not
+merely left in the deposits list.

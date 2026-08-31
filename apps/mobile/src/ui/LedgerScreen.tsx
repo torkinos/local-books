@@ -22,8 +22,13 @@ export interface LedgerScreenProps {
   readonly events: readonly ChainEvent[];
   readonly syncStates: ReadonlyMap<Address, AddressSyncState>;
   readonly refreshing: boolean;
+  /** A failed books load. Rendered as a banner; empty books with no banner = truth. */
+  readonly errorBanner: string | null;
   readonly onRefresh: () => void;
   readonly onAddAddress: () => void;
+  readonly onOpenInvoices: () => void;
+  /** Open + overdue count, shown on the invoices button. */
+  readonly openInvoiceCount: number;
 }
 
 export function LedgerScreen({
@@ -31,8 +36,11 @@ export function LedgerScreen({
   events,
   syncStates,
   refreshing,
+  errorBanner,
   onRefresh,
   onAddAddress,
+  onOpenInvoices,
+  openInvoiceCount,
 }: LedgerScreenProps): React.JSX.Element {
   const labelFor = new Map<Address, string>(watched.map((w) => [w.address, w.label]));
 
@@ -40,10 +48,23 @@ export function LedgerScreen({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Local Books</Text>
-        <Pressable style={styles.addButton} onPress={onAddAddress} testID="add-address-button">
-          <Text style={styles.addButtonText}>+ Watch address</Text>
-        </Pressable>
+        <View style={styles.headerButtons}>
+          <Pressable style={styles.invoicesButton} onPress={onOpenInvoices} testID="invoices-button">
+            <Text style={styles.invoicesButtonText}>
+              Invoices{openInvoiceCount > 0 ? ` (${openInvoiceCount})` : ''}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.addButton} onPress={onAddAddress} testID="add-address-button">
+            <Text style={styles.addButtonText}>+ Watch</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {errorBanner !== null && (
+        <View style={styles.errorBanner} testID="books-error">
+          <Text style={styles.errorBannerText}>Could not read the books: {errorBanner}</Text>
+        </View>
+      )}
 
       {watched.map((w) => {
         const status = syncStatusLine(syncStates.get(w.address));
@@ -137,6 +158,22 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  invoicesButton: {
+    borderWidth: 1,
+    borderColor: '#1f4e9c',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  invoicesButtonText: {
+    color: '#1f4e9c',
+    fontWeight: '600',
+    fontSize: 13,
+  },
   addButton: {
     backgroundColor: '#1f4e9c',
     borderRadius: 8,
@@ -172,6 +209,15 @@ const styles = StyleSheet.create({
     // Explicitly bounded: a ScrollView-family component must never size itself to
     // its content, or a long ledger would overflow instead of scrolling.
     flex: 1,
+  },
+  errorBanner: {
+    backgroundColor: '#f8e6e3',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  errorBannerText: {
+    color: '#b3261e',
+    fontSize: 13,
   },
   empty: {
     padding: 32,

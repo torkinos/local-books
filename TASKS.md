@@ -213,10 +213,24 @@ so the pipeline fails early rather than on Sep 26.
 
 ## W3 · Mon Aug 31 – Sun Sep 6 — invoicing
 
-### `[ ]` T18 · Invoice model + creation screen
+### `[x]` T18 · Invoice model + creation screen
 Client, line items, token, amount, due date. Emits an `invoice-created` op.
 **Accept:** an invoice round-trips through the op log and appears in the projection;
 amounts stay bigint end to end.
+> **2026-08-31:** done, plus the tier-a auto-match wiring the demo path needs (D14).
+> Round-trip proven against REAL SQLite incl. close-and-reopen with the exact bigint
+> total; the amounts grep is clean (`Number(` touches only regex-guarded integer
+> quantities, dates, and an HTTP header — never money). Decisions in code:
+> `invoiceId` IS the reference key (1:1 per D7; split only if reissuing ever lands);
+> quantities are positive INTEGERS (fractional units are priced into `unitAmount` —
+> exact bigint or nothing); due dates are local end-of-day; devnet USDC added to
+> `STABLE_MINTS` so the devnet demo values 1:1. Screens: create-invoice (line items,
+> token + due-date chips, payTo from watched), invoices list (open/paid/overdue
+> badges, "matched by reference" attribution), ledger header link. Adversarial
+> workflow (13 agents) confirmed 2 policy majors — both auto-apply gates in D14 —
+> plus a double-tap double-invoice race, unobserved refresh failures (now a ledger
+> banner), and two RN form nits; all fixed + pinned. 23 new tests. Screen gets
+> eyeballed in the W3 device pass alongside T15.
 
 ### `[ ]` T19 · Invoice PDF via `DocPort`
 Core builds the model; `apps/mobile` renders with `expo-print`. Applies S3's findings.

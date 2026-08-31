@@ -30,10 +30,12 @@ export {
 
 export { sortOps, dedupOps, makeOpId, stableStringify, opsAsOf } from './oplog/index.js';
 
+export { invoiceTotal, InvalidLineItemError } from './invoice/index.js';
+
 export { matchByReference, amountAgreement } from './match/index.js';
 export type { MatchCandidate, MatchTier, HeuristicMatchInput, HeuristicMatcher } from './match/index.js';
 
-export { project, rebuild, withOverdue } from './projection/index.js';
+export { project, rebuild, withOverdue, matchPairKey } from './projection/index.js';
 export type {
   ProjectionState,
   InvoiceView,
