@@ -5,7 +5,7 @@
  * string); nothing here ever converts an amount to a float.
  */
 import type { TokenAmount, UnixSeconds } from '@local-books/core';
-import { formatUnits } from '@local-books/core';
+import { formatUnitsTrimmed } from '@local-books/core';
 
 /** 'EPjF...Dt1v' -- enough to recognise, short enough for a list row. */
 export function shortAddress(address: string): string {
@@ -19,9 +19,7 @@ export function shortAddress(address: string): string {
  * exact value stays in the event store untouched.
  */
 export function formatTokenAmount(amount: TokenAmount): string {
-  const exact = formatUnits(amount.raw, amount.decimals);
-  const trimmed = exact.includes('.') ? exact.replace(/\.?0+$/, '') : exact;
-  const value = trimmed === '' || trimmed === '-' ? '0' : trimmed;
+  const value = formatUnitsTrimmed(amount.raw, amount.decimals);
   if (amount.symbol !== undefined) return `${value} ${amount.symbol}`;
   if (amount.mint === null) return `${value} SOL`;
   return `${value} tokens (${shortAddress(amount.mint)})`;
