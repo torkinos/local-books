@@ -237,10 +237,17 @@ Core builds the model; `apps/mobile` renders with `expo-print`. Applies S3's fin
 **Accept:** a multi-line invoice renders with correct totals and no clipped content;
 core has no PDF dependency.
 
-### `[ ]` T20 · Solana Pay QR + share sheet
+### `[~]` T20 · Solana Pay QR + share sheet
 Embed the transfer-request URL as a QR; share via the native sheet.
 **Accept:** Phantom scans the QR from the shared PDF and pre-fills the correct mint,
 amount, and reference; sharing works to at least WhatsApp and email.
+> **2026-08-31:** pure half done — `packages/core/src/pay/`: spec-shaped
+> transfer-request URL builder (exact bigint amounts via `formatUnitsTrimmed`, no
+> URLSearchParams, byte-stable output pinned verbatim). Verification round fetched
+> the Solana Pay spec and mutation-tested the suite; both confirmed findings were
+> test-strength gaps, fixed (float-implementation-killing fixtures added). Useful
+> immediately for the S2/S3 spikes, which need these URLs. Remaining: QR rendering
+> into the PDF (waits on S3) + share sheet.
 
 ### `[ ]` T21 · Landing page skeleton `[M2]`
 Deployed and thin: what it is, one screenshot, a Release download link.
