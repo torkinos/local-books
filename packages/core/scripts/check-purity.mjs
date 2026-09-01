@@ -22,6 +22,7 @@ import 'fs';
 export const t = Date.now();
 export const r = Math.random();
 export const d = new Date();
+export const p = setTimeout(() => {}, 0);
 `;
 const MUST_FLAG = [
   'react-native',
@@ -32,6 +33,7 @@ const MUST_FLAG = [
   'Date.now',
   'Math.random',
   'new Date()',
+  'setTimeout',
 ];
 
 // The canary must live under src/ so the package's ESLint config governs it, but its

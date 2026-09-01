@@ -320,6 +320,25 @@ describe('JsonRpcAdapter timeout', () => {
     const adapter = new JsonRpcAdapter('https://rpc.test', 'test', { requestTimeoutMs: 25 });
     await expect(adapter.getSignatures(ADDRESS, { limit: 10 })).rejects.toThrow('aborted');
   });
+
+  it('aborts a hung BODY read: headers arrived (200 OK) but json() never settles on its own', async () => {
+    // Streaming fetch (undici, expo/fetch) resolves at HEADERS; a connection dying
+    // mid-body then hangs response.json() forever. The abort timer must stay armed
+    // across the body read -- clearTimeout lives in `finally`, so it only disarms
+    // after json() settles -- or the airplane-mode hang comes back one layer deeper.
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => '',
+      json: () =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    }));
+    const adapter = new JsonRpcAdapter('https://rpc.test', 'test', { requestTimeoutMs: 25 });
+    await expect(adapter.getSignatures(ADDRESS, { limit: 10 })).rejects.toThrow('aborted');
+  });
 });
 
 describe('parseRetryAfterMs (RFC 9110: delta-seconds and HTTP-date forms)', () => {

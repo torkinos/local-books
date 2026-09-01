@@ -23,9 +23,13 @@ Three things it will never do:
 
 v0.1 is under construction toward **Sep 27, 2026** (Superteam Agentic Engineering
 grant). The pure-TypeScript domain core — ingestion, normalization, matching,
-projection, valuation, reporting — is built and tested; the Expo shell is next. See
-[PLAN.md](./PLAN.md) for the week-by-week plan and [TASKS.md](./TASKS.md) for live
-task status.
+projection, valuation, reporting, document models — is built and tested, and the
+Expo app around it is substantially in place: encrypted SQLite storage, the sync
+engine, ledger / invoices / create-invoice / income screens, tier-a auto-matching,
+invoice PDFs with Solana Pay QR, NBG rate valuation, and CSV export. What remains is
+the on-device pass (spikes S2/S3, demo capture, the Release APK) and the ship work
+in the final weeks. See [PLAN.md](./PLAN.md) for the week-by-week plan and
+[TASKS.md](./TASKS.md) for live task status.
 
 ## Build
 

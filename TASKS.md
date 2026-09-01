@@ -69,8 +69,12 @@ core never learned SQLite exists).
 > books); `isSQLCipher()` asserted; corrupted rows fail with table+row named. The
 > same review fixed the CORE driver: checkpoint now written only after the consumer
 > acknowledged the page (D8 amendment — no more silent history holes on process
-> kill). **Remaining on device:** encrypted file unreadable by plain `sqlite3`;
-> physical restart through the op-sqlite binding.
+> kill).
+> **2026-09-01:** the D12 key-loss decision table extracted to
+> `storage/keyProvision.ts` and unit-tested row by row (incl. marker-written-only-
+> after-open and the died-between-writes case) — it was the one review-hardened T6
+> logic with zero automated coverage. **Remaining on device:** encrypted file
+> unreadable by plain `sqlite3`; physical restart through the op-sqlite binding.
 
 ### `[x]` T7 · Telemetry off (D5)
 Disable Expo/EAS analytics; no crash reporter.
@@ -130,8 +134,9 @@ silently — the backfill driver owns pacing.
 > ends history (short pages cursor on — a short page must never mark the checkpoint
 > complete), `getTransactions` preserves partial progress across mid-batch throttling
 > (contract updated on the port), body reads covered by the timeout, RFC 9110
-> HTTP-date Retry-After parsed, malformed results labeled with the endpoint. 21 unit
-> tests, concurrency measured not assumed.
+> HTTP-date Retry-After parsed, malformed results labeled with the endpoint. 23 unit
+> tests (audit corrected the note's original count; +1 hung-body-read test 09-01),
+> concurrency measured not assumed.
 
 ### `[x]` T10 · Checkpointed backfill driver (core)
 Async generator yielding after every checkpointed page, returning a requested `pauseMs`;
@@ -191,8 +196,8 @@ survives backgrounding the app.
 > pulling. (2) Both screens + `App.tsx` orchestration: add-address with base58/32-byte
 > validation; ledger with per-address progress (honest counts, no fake percentages);
 > sync on open, foreground, pull-to-refresh, and a 30 s foreground timer — no
-> real-time claim anywhere. 53 new tests incl. an exact D8-interleaving assertion and
-> a resume-after-cancel replay test. Two adversarial workflow rounds (21 agents)
+> real-time claim anywhere. 41 net new tests (count corrected by the 09-01 audit)
+> incl. an exact D8-interleaving assertion and a resume-after-cancel replay test. Two adversarial workflow rounds (21 agents)
 > confirmed and fixed five real data-loss bugs — recorded under D8 (two watermark
 > rules), D11 (two wire-trust rules, verified against live devnet), and D13 (engine
 > policy). **Remaining on device:** run both screens against devnet on the physical
@@ -229,13 +234,25 @@ amounts stay bigint end to end.
 > badges, "matched by reference" attribution), ledger header link. Adversarial
 > workflow (13 agents) confirmed 2 policy majors — both auto-apply gates in D14 —
 > plus a double-tap double-invoice race, unobserved refresh failures (now a ledger
-> banner), and two RN form nits; all fixed + pinned. 23 new tests. Screen gets
-> eyeballed in the W3 device pass alongside T15.
+> banner), and two RN form nits; all fixed. 24 new tests (count corrected 09-01).
+> **2026-09-01:** the two fixes that were code-only are now pinned — the double-tap
+> latch extracted to `ui/submitOnce.ts` and unit-tested, and a test pins D14 gate 2
+> counting human-REJECTED claims toward pass-level ambiguity. Screen gets eyeballed
+> in the W3 device pass alongside T15.
 
-### `[ ]` T19 · Invoice PDF via `DocPort`
+### `[~]` T19 · Invoice PDF via `DocPort`
 Core builds the model; `apps/mobile` renders with `expo-print`. Applies S3's findings.
 **Accept:** a multi-line invoice renders with correct totals and no clipped content;
 core has no PDF dependency.
+> **2026-09-01:** code half done. Core: `src/doc/` — `invoiceDoc` model builder
+> (amounts formatted from exact bigints, line totals recomputed and asserted against
+> the stored total, QR payload and printed total from the same `TokenAmount`; D17).
+> Mobile: `src/doc/invoiceHtml.ts` (pure HTML renderer — every model string escaped,
+> pinned field-by-field; long base58 wraps, rows keep whole across page breaks, zero
+> external resources) + `src/adapters/docs.ts` DocPort over expo-print/expo-sharing
+> (Expo modules dynamically imported inside the two port methods so the whole HTML
+> path tests under Node). Share button on every invoice row. 18 tests.
+> **Remaining on device:** S3 pass — print/render on the phone, apply findings.
 
 ### `[~]` T20 · Solana Pay QR + share sheet
 Embed the transfer-request URL as a QR; share via the native sheet.
@@ -246,8 +263,11 @@ amount, and reference; sharing works to at least WhatsApp and email.
 > URLSearchParams, byte-stable output pinned verbatim). Verification round fetched
 > the Solana Pay spec and mutation-tested the suite; both confirmed findings were
 > test-strength gaps, fixed (float-implementation-killing fixtures added). Useful
-> immediately for the S2/S3 spikes, which need these URLs. Remaining: QR rendering
-> into the PDF (waits on S3) + share sheet.
+> immediately for the S2/S3 spikes, which need these URLs.
+> **2026-09-01:** QR + share sheet code built with T19: QR generated locally as SVG
+> (`qrcode`, pure JS) into the invoice PDF; native share via expo-sharing behind
+> `DocPort.share`. **Remaining on device:** S3 — Phantom scans the QR from the
+> shared PDF with correct mint/amount/reference; share to WhatsApp and email.
 
 ### `[ ]` T21 · Landing page skeleton `[M2]`
 Deployed and thin: what it is, one screenshot, a Release download link.
@@ -262,10 +282,21 @@ it auto-match. Screen-captured.
 
 ## W4 · Mon Sep 7 – Sun Sep 13 — valuation + export
 
-### `[ ]` T23 · NBG rate adapter + cache
+### `[x]` T23 · NBG rate adapter + cache
 `RatePort` over the National Bank of Georgia daily rates, cached locally.
 **Accept:** returns the rate **effective on the requested date**, not today's; throws
 rather than substituting a nearby day; works offline once cached.
+> **2026-09-01:** done, live-verified. `adapters/rates.ts` + `storage/rateCache.ts`
+> (plain SQLite, first-write-wins — D15): NBG's own effectivity model (a Friday rate
+> IS the weekend rate, `validFromDate <=` requested), `rateFormated` used VERBATIM
+> (float field never consulted, pinned by a disagreeing fixture), zero rates refused
+> at fetch AND at cache read, strict date-part parsing (no `Date.parse` local-time
+> trap), future dates throw, offline-with-nothing-cached throws actionable copy —
+> never a neighbouring day. Receipt days are GEORGIAN days (+4h; D15.4). Fixtures
+> pinned byte-for-byte from a live 2026-09-01 probe; env-gated integration test ran
+> against the real endpoint (holiday + weekend carry both verified). 23 unit tests
+> + 2 live. Review round then hardened all of the above (zero-rate, zone-less
+> validFromDate, dual-write coverage were its findings).
 
 ### `[x]` T24 · Valuation at receipt date
 > **2026-08-23:** `value.test.ts` added — half-up-at-2dp cases float arithmetic gets
@@ -280,6 +311,10 @@ makes this impossible to omit; a non-stable mint throws rather than guessing;
 > **2026-08-23:** RFC 4180 round-trip tested through a strict parser; unvalued rows
 > reported; corrupted fiat amounts throw instead of truncating; spreadsheet formula
 > injection neutralized (attacker-controlled memo → inert text).
+> **2026-09-01:** app half wired — Export CSV on the income screen writes `toCsv`
+> output to a cache file and hands it to the native share sheet
+> (`adapters/files.ts`). Screen total and CSV column tied to the cent through ONE
+> statement (D16). Remaining device check: open the shared file in a spreadsheet.
 Audit columns: rate, rate source, rate date alongside amounts.
 **Accept:** RFC 4180 escaping tested against a memo containing a comma, a quote, and a
 newline; the file opens cleanly in a spreadsheet; unvalued rows are **reported**, not
@@ -291,6 +326,17 @@ Monthly totals per client from the projection.
 > **2026-08-23:** core half done — `monthlyTotalsPerClient` with a test tying monthly
 > totals, statement total, and the summed CSV column to the cent. The *screen* waits
 > on the app shell (T5/T15).
+> **2026-09-01:** screen + valuation wiring done — `ui/IncomeScreen.tsx` over
+> `ui/incomeSummary.ts` (one statement feeds screen, monthly groups, and CSV —
+> to-the-cent is structural) and `valuation.ts` (`valueEvents`: per-row failure
+> isolation, per-day failure memo). An adversarial review round (49 agents, 21
+> confirmed findings, all fixed) drove the load-bearing policies now in D16:
+> internal transfers between the user's own wallets are EXCLUDED from income and
+> counted; day/month labels are Georgian calendar days matching the NBG rate days;
+> period end clears skewed blockTimes; the unvalued note separates fetch failures
+> ("reconnect and refresh") from unsupported tokens (no false retry promise);
+> loading never renders as a definitive 0.00. **Remaining on device:** eyeball the
+> screen in the W3 device pass; spreadsheet-open the exported CSV.
 
 ---
 

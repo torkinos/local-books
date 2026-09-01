@@ -14,9 +14,22 @@ export interface InvoicesScreenProps {
   readonly invoices: readonly InvoiceView[];
   readonly onCreate: () => void;
   readonly onBack: () => void;
+  /** Render the invoice as a PDF (with its Solana Pay QR) and open the share sheet. */
+  readonly onShare: (view: InvoiceView) => void;
+  /** invoiceId currently being rendered/shared; its button shows progress, all disable. */
+  readonly sharingInvoiceId: string | null;
+  /** A failed render/share. Same banner treatment as the ledger's books error. */
+  readonly shareError: string | null;
 }
 
-export function InvoicesScreen({ invoices, onCreate, onBack }: InvoicesScreenProps): React.JSX.Element {
+export function InvoicesScreen({
+  invoices,
+  onCreate,
+  onBack,
+  onShare,
+  sharingInvoiceId,
+  shareError,
+}: InvoicesScreenProps): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -28,6 +41,12 @@ export function InvoicesScreen({ invoices, onCreate, onBack }: InvoicesScreenPro
           <Text style={styles.createButtonText}>+ New</Text>
         </Pressable>
       </View>
+
+      {shareError !== null && (
+        <View style={styles.errorBanner} testID="share-error">
+          <Text style={styles.errorBannerText}>{shareError}</Text>
+        </View>
+      )}
 
       <FlatList
         style={styles.list}
@@ -41,13 +60,30 @@ export function InvoicesScreen({ invoices, onCreate, onBack }: InvoicesScreenPro
             </Text>
           </View>
         }
-        renderItem={({ item }) => <InvoiceRow view={item} />}
+        renderItem={({ item }) => (
+          <InvoiceRow
+            view={item}
+            onShare={onShare}
+            sharing={sharingInvoiceId === item.invoice.invoiceId}
+            shareDisabled={sharingInvoiceId !== null}
+          />
+        )}
       />
     </View>
   );
 }
 
-function InvoiceRow({ view }: { readonly view: InvoiceView }): React.JSX.Element {
+function InvoiceRow({
+  view,
+  onShare,
+  sharing,
+  shareDisabled,
+}: {
+  readonly view: InvoiceView;
+  readonly onShare: (view: InvoiceView) => void;
+  readonly sharing: boolean;
+  readonly shareDisabled: boolean;
+}): React.JSX.Element {
   const { invoice, status, payments } = view;
   return (
     <View style={styles.row}>
@@ -61,6 +97,14 @@ function InvoiceRow({ view }: { readonly view: InvoiceView }): React.JSX.Element
             : ''}
         </Text>
       </View>
+      <Pressable
+        style={[styles.shareButton, shareDisabled && styles.shareButtonDisabled]}
+        onPress={() => onShare(view)}
+        disabled={shareDisabled}
+        testID={`share-invoice-${invoice.invoiceId}`}
+      >
+        <Text style={styles.shareButtonText}>{sharing ? 'Rendering…' : 'Share PDF'}</Text>
+      </Pressable>
       <View style={[styles.badge, badgeStyle[status]]}>
         <Text style={[styles.badgeText, badgeTextStyle[status]]}>{status}</Text>
       </View>
@@ -134,6 +178,30 @@ const styles = StyleSheet.create({
   due: {
     fontSize: 12,
     opacity: 0.6,
+  },
+  shareButton: {
+    borderWidth: 1,
+    borderColor: '#1f4e9c',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  shareButtonDisabled: {
+    opacity: 0.4,
+  },
+  shareButtonText: {
+    color: '#1f4e9c',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  errorBanner: {
+    backgroundColor: '#f8e6e3',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  errorBannerText: {
+    color: '#b3261e',
+    fontSize: 13,
   },
   badge: {
     borderRadius: 12,

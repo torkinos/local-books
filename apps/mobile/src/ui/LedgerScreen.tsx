@@ -27,6 +27,7 @@ export interface LedgerScreenProps {
   readonly onRefresh: () => void;
   readonly onAddAddress: () => void;
   readonly onOpenInvoices: () => void;
+  readonly onOpenIncome: () => void;
   /** Open + overdue count, shown on the invoices button. */
   readonly openInvoiceCount: number;
 }
@@ -40,6 +41,7 @@ export function LedgerScreen({
   onRefresh,
   onAddAddress,
   onOpenInvoices,
+  onOpenIncome,
   openInvoiceCount,
 }: LedgerScreenProps): React.JSX.Element {
   const labelFor = new Map<Address, string>(watched.map((w) => [w.address, w.label]));
@@ -49,6 +51,9 @@ export function LedgerScreen({
       <View style={styles.header}>
         <Text style={styles.title}>Local Books</Text>
         <View style={styles.headerButtons}>
+          <Pressable style={styles.invoicesButton} onPress={onOpenIncome} testID="income-button">
+            <Text style={styles.invoicesButtonText}>Income</Text>
+          </Pressable>
           <Pressable style={styles.invoicesButton} onPress={onOpenInvoices} testID="invoices-button">
             <Text style={styles.invoicesButtonText}>
               Invoices{openInvoiceCount > 0 ? ` (${openInvoiceCount})` : ''}
