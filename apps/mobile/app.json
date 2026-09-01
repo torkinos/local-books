@@ -6,7 +6,10 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "platforms": ["android", "ios"],
+    "platforms": [
+      "android",
+      "ios"
+    ],
     "android": {
       "package": "com.localbooks.app",
       "edgeToEdgeEnabled": true
@@ -14,6 +17,9 @@
     "ios": {
       "bundleIdentifier": "com.localbooks.app",
       "supportsTablet": false
-    }
+    },
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }

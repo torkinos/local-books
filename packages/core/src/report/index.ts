@@ -7,7 +7,10 @@
  *
  * v0.1 ships the generic CSV. The Koinly-compatible variant is deferred (line 126).
  */
-import type { ChainEvent, FiatCode, UnixSeconds, Valuation } from '../types/index.js';
+import type { Address, ChainEvent, FiatCode, UnixSeconds, Valuation } from '../types/index.js';
+import { asUnixSeconds } from '../types/index.js';
+import type { ProjectionState } from '../projection/index.js';
+import { dedupEvents, eventKey } from '../normalize/index.js';
 import { formatUnits } from '../value/index.js';
 
 export interface IncomeRow {
@@ -31,6 +34,83 @@ export interface IncomeStatement {
    * omits rows is worse than one that says what it left out.
    */
   readonly unvaluedCount: number;
+  /**
+   * Incoming rows excluded because the money came from one of the user's OWN
+   * addresses (`ownAddresses`). Surfaced for the same reason as `unvaluedCount`:
+   * the exclusion is correct, but it must never be invisible.
+   */
+  readonly internalCount: number;
+  /** The calendar the statement's day/month labels use. See BuildStatementOptions. */
+  readonly calendarOffsetSeconds: number;
+}
+
+export interface BuildStatementOptions {
+  /**
+   * The user's own addresses — every address ever watched plus every invoice payTo
+   * (the same set rebuild() loads events for). An incoming transfer whose
+   * counterparty is one of them is the in-leg of a move between the user's own
+   * wallets: D10 keeps both legs as ledger facts, but booking that leg as INCOME
+   * would inflate the turnover a Georgian filing pays tax on. Excluded and counted
+   * in `internalCount`, never summed or exported.
+   */
+  readonly ownAddresses?: ReadonlySet<Address>;
+  /**
+   * Seconds added to UTC before taking a calendar date for the CSV `date` column
+   * and the monthly grouping. A filing's "receipt date" is a LOCAL calendar day —
+   * for the Georgian beachhead +4h (no DST since 2005) — while blockTime is an
+   * instant; without this, a payment landing 00:00–04:00 Tbilisi books to the
+   * previous day. Default 0 keeps plain-UTC behavior. Rate dates are untouched:
+   * they are already calendar days, not instants.
+   */
+  readonly calendarOffsetSeconds?: number;
+}
+
+/** Calendar day of an instant under the statement's reporting calendar. */
+function calendarDay(seconds: UnixSeconds, offsetSeconds: number): string {
+  return isoDate(asUnixSeconds(seconds + offsetSeconds));
+}
+
+/**
+ * Join chain events with what the projection knows about them: which invoice a
+ * payment settled (and so which client it came from), any assigned category, and the
+ * valuation the caller computed. One row per event; `buildIncomeStatement` does the
+ * filtering, so screen and CSV are guaranteed to start from the same joined set.
+ *
+ * Invoice attribution applies to `direction: 'in'` events only. The matcher only ever
+ * confirms incoming payments, but `eventKey` deliberately omits the watched address
+ * (D10 keeps both sides of a transfer between two watched wallets), so without the
+ * direction gate the sender's `out` twin would inherit the recipient's invoice.
+ *
+ * `valuations` is keyed by `eventKey`. A missing entry means the row could not be
+ * valued (unsupported mint, or the rate was unreachable); it stays in the report and
+ * is counted by `unvaluedCount` rather than dropped.
+ */
+export function assembleIncomeRows(
+  state: ProjectionState,
+  events: readonly ChainEvent[],
+  valuations: ReadonlyMap<string, Valuation>,
+): readonly IncomeRow[] {
+  const invoiceByEvent = new Map<string, { invoiceId: string; clientName: string }>();
+  for (const view of state.invoices) {
+    for (const payment of view.payments) {
+      invoiceByEvent.set(eventKey(payment), {
+        invoiceId: view.invoice.invoiceId,
+        clientName: view.invoice.clientName,
+      });
+    }
+  }
+
+  return dedupEvents(events).map((event) => {
+    const key = eventKey(event);
+    const matched = event.direction === 'in' ? invoiceByEvent.get(key) : undefined;
+    return {
+      event,
+      valuation: valuations.get(key) ?? null,
+      invoiceId: matched?.invoiceId ?? null,
+      clientName: matched?.clientName ?? null,
+      category: state.categories.get(key) ?? null,
+    };
+  });
 }
 
 /**
@@ -47,16 +127,26 @@ export function buildIncomeStatement(
   fiat: FiatCode,
   periodStart: UnixSeconds,
   periodEnd: UnixSeconds,
+  options: BuildStatementOptions = {},
 ): IncomeStatement {
+  const own = options.ownAddresses ?? new Set<Address>();
+  const calendarOffsetSeconds = options.calendarOffsetSeconds ?? 0;
+
+  let internal = 0;
   const inPeriod = rows.filter((row) => {
     const t = row.event.blockTime;
-    return (
+    const counts =
       row.event.succeeded &&
       t !== null &&
       t >= periodStart &&
       t < periodEnd &&
-      row.event.direction === 'in'
-    );
+      row.event.direction === 'in';
+    if (!counts) return false;
+    if (row.event.counterparty !== null && own.has(row.event.counterparty)) {
+      internal += 1;
+      return false;
+    }
+    return true;
   });
 
   let total = 0n;
@@ -76,6 +166,8 @@ export function buildIncomeStatement(
     rows: inPeriod,
     totalFiat: formatUnits(total, 2),
     unvaluedCount: unvalued,
+    internalCount: internal,
+    calendarOffsetSeconds,
   };
 }
 
@@ -104,7 +196,7 @@ export function monthlyTotalsPerClient(statement: IncomeStatement): readonly Mon
     // Rows without blockTime never enter a statement (buildIncomeStatement requires a
     // time to place them in the period), so this guard is for the type, not for data.
     if (row.event.blockTime === null) continue;
-    const month = isoDate(row.event.blockTime).slice(0, 7);
+    const month = calendarDay(row.event.blockTime, statement.calendarOffsetSeconds).slice(0, 7);
     const key = `${month}\u0000${row.clientName ?? ''}`;
     const group = groups.get(key) ?? { total: 0n, rows: 0, unvalued: 0 };
     group.rows += 1;
@@ -165,7 +257,9 @@ export function toCsv(statement: IncomeStatement): string {
   for (const row of statement.rows) {
     lines.push(
       [
-        row.event.blockTime === null ? '' : isoDate(row.event.blockTime),
+        row.event.blockTime === null
+          ? ''
+          : calendarDay(row.event.blockTime, statement.calendarOffsetSeconds),
         row.event.signature,
         row.event.direction,
         row.event.counterparty ?? '',

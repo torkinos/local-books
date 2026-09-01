@@ -80,6 +80,17 @@ module.exports = {
       { name: 'localStorage', message: 'Persistence belongs to StoragePort.' },
       { name: 'window', message: 'core is UI-free.' },
       { name: 'document', message: 'core is UI-free.' },
+      // Timers are the caller's job (DECISIONS.md D8): the backfill driver REQUESTS
+      // pauses by returning pauseMs, and whoever drives it sleeps. A timer inside
+      // core would smuggle real time back into logic the tests run instantly.
+      {
+        name: 'setTimeout',
+        message: 'No timers in core: request a pause (return pauseMs) and let the caller sleep (D8).',
+      },
+      {
+        name: 'setInterval',
+        message: 'No timers in core: request a pause (return pauseMs) and let the caller sleep (D8).',
+      },
     ],
     'no-restricted-properties': [
       'error',

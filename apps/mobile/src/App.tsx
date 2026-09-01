@@ -19,15 +19,28 @@ import type {
   StoragePort,
   WatchedAddressView,
 } from '@local-books/core';
-import { dedupEvents, project, sortByRecency, withOverdue } from '@local-books/core';
-import { clock, openEncryptedStorage, referenceKeys, rpcEndpoints, KeyLostError } from './ports.js';
+import { dedupEvents, invoiceDoc, project, sortByRecency, withOverdue } from '@local-books/core';
+import {
+  clock,
+  docs,
+  openEncryptedStorage,
+  openRatePort,
+  referenceKeys,
+  rpcEndpoints,
+  KeyLostError,
+} from './ports.js';
 import { addressWatchedOp, invoiceCreatedOp } from './ops.js';
 import { autoMatchOps } from './matching.js';
+import { shareTextFile } from './adapters/files.js';
 import { syncAddress } from './sync/engine.js';
 import type { SyncResult } from './sync/engine.js';
+import { valueEvents, FIAT } from './valuation.js';
 import { AddAddressScreen } from './ui/AddAddressScreen.js';
 import type { CreateInvoiceSubmission } from './ui/CreateInvoiceScreen.js';
 import { CreateInvoiceScreen } from './ui/CreateInvoiceScreen.js';
+import { IncomeScreen } from './ui/IncomeScreen.js';
+import type { IncomeSummary } from './ui/incomeSummary.js';
+import { csvFilename, incomeSummary, internalNote, valuationNote } from './ui/incomeSummary.js';
 import { InvoicesScreen } from './ui/InvoicesScreen.js';
 import { LedgerScreen } from './ui/LedgerScreen.js';
 import type { AddressSyncState } from './ui/syncStatus.js';
@@ -94,18 +107,43 @@ function BootFailure({ error }: { readonly error: unknown }): React.JSX.Element 
 }
 
 function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element {
-  const [screen, setScreen] = useState<'ledger' | 'add' | 'invoices' | 'create-invoice'>('ledger');
+  const [screen, setScreen] = useState<
+    'ledger' | 'add' | 'invoices' | 'create-invoice' | 'income'
+  >('ledger');
   const [books, setBooks] = useState<Books>({ watched: [], events: [], invoices: [] });
   const [syncStates, setSyncStates] = useState<ReadonlyMap<Address, AddressSyncState>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
   // A failed refresh must not present as empty books: the ledger renders this as a
   // banner (StorageCorruptionError's message names the bad table+row on purpose).
   const [booksError, setBooksError] = useState<string | null>(null);
+  // Income statement (T26): rebuilt on entering the screen and on its pull-to-refresh.
+  // `note` explains omitted rows; `incomeError` is a whole-statement failure and takes
+  // precedence in the same banner slot.
+  const [income, setIncome] = useState<{
+    readonly summary: IncomeSummary;
+    readonly note: string | null;
+    readonly internal: string | null;
+  } | null>(null);
+  const [incomeLoading, setIncomeLoading] = useState(false);
+  const [incomeError, setIncomeError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [sharingInvoiceId, setSharingInvoiceId] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const watchedRef = useRef<readonly WatchedAddressView[]>([]);
   const runningRef = useRef(new Set<Address>());
   const lastRefreshRef = useRef(0);
   const refreshQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // Latest-wins token for loadIncome: passes overlap (re-enter the screen while a
+  // prior pass awaits NBG), and a slower STALE pass must never overwrite a fresher
+  // statement -- same class of race refreshBooks serializes against.
+  const incomeRunRef = useRef(0);
+  // Synchronous latches for the two share flows. State alone is not a latch here:
+  // setState is async, so a double-tap races through before the re-render commits --
+  // the exact bug submitOnce.ts exists for (T18's double-invoice race).
+  const exportLatchRef = useRef(false);
+  const shareLatchRef = useRef(false);
 
   const setSyncState = useCallback((address: Address, state: AddressSyncState): void => {
     setSyncStates((current) => {
@@ -264,6 +302,106 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
     [storage, refreshBooks],
   );
 
+  /**
+   * Rebuild the income statement (T26): re-read the books, value what can be valued
+   * at official rates, and derive screen + CSV from ONE statement (incomeSummary).
+   *
+   * Events are loaded for the same address set core's rebuild() uses — every
+   * address-watched target ever, plus every invoice payTo — not just the currently
+   * watched list: income booked to a since-unwatched address must not vanish from
+   * the statement (see projection's address-unwatched rationale).
+   */
+  const loadIncome = useCallback(async (): Promise<void> => {
+    const run = ++incomeRunRef.current;
+    setIncomeLoading(true);
+    try {
+      const ops = await storage.readOps();
+      const addresses = new Set<Address>();
+      for (const op of ops) {
+        if (op.type === 'address-watched') addresses.add(op.address);
+        if (op.type === 'invoice-created') addresses.add(op.payTo);
+      }
+      const events: ChainEvent[] = [];
+      for (const address of addresses) {
+        // Plain loop, not push(...spread): same argument-limit reasoning as rebuild().
+        for (const event of await storage.getChainEvents(address)) events.push(event);
+      }
+      const rates = await openRatePort();
+      // Internal moves (counterparty is one of the user's own addresses) are excluded
+      // from the statement below, so don't spend rate fetches on them -- and don't
+      // let their fetch failures count against rows the report will never show.
+      const valuationTargets = events.filter(
+        (event) => event.counterparty === null || !addresses.has(event.counterparty),
+      );
+      const { valuations, failures, firstError } = await valueEvents(valuationTargets, rates, FIAT);
+      const summary = incomeSummary(project(ops, events), events, valuations, clock.now(), addresses);
+      if (incomeRunRef.current !== run) return; // a fresher pass owns the screen now
+      setIncome({
+        summary,
+        note: valuationNote(summary.statement.unvaluedCount, failures, firstError),
+        internal: internalNote(summary.statement.internalCount),
+      });
+      setIncomeError(null);
+    } catch (error) {
+      // A whole-statement failure (storage, or the rate cache DB refusing to open) —
+      // per-row rate failures never land here, valueEvents absorbs those. Whatever
+      // statement was last shown stays up rather than flashing to empty books.
+      if (incomeRunRef.current !== run) return;
+      setIncomeError(
+        `Could not build the income statement: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      if (incomeRunRef.current === run) setIncomeLoading(false);
+    }
+  }, [storage]);
+
+  const onOpenIncome = useCallback((): void => {
+    setScreen('income');
+    void loadIncome();
+  }, [loadIncome]);
+
+  const onExportCsv = useCallback((): void => {
+    const current = income;
+    if (current === null || exportLatchRef.current) return;
+    exportLatchRef.current = true;
+    setExporting(true);
+    setExportError(null);
+    void shareTextFile(csvFilename(clock.now()), current.summary.csv, 'text/csv')
+      .catch((error: unknown) => {
+        // Its own state, NOT incomeError: a failed export says nothing about the
+        // statement on screen, and it must not hide the unvalued-rows note past
+        // the next successful export.
+        setExportError(
+          `Export failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      })
+      .finally(() => {
+        exportLatchRef.current = false;
+        setExporting(false);
+      });
+  }, [income]);
+
+  /** Render one invoice to PDF (QR included) and hand it to the native share sheet. */
+  const onShareInvoice = useCallback((view: InvoiceView): void => {
+    if (shareLatchRef.current) return;
+    shareLatchRef.current = true;
+    setSharingInvoiceId(view.invoice.invoiceId);
+    setShareError(null);
+    void (async () => {
+      const { uri } = await docs.renderPdf(invoiceDoc(view.invoice));
+      await docs.share(uri, { mimeType: 'application/pdf' });
+    })()
+      .catch((error: unknown) => {
+        setShareError(
+          `Could not share the invoice PDF: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      })
+      .finally(() => {
+        shareLatchRef.current = false;
+        setSharingInvoiceId(null);
+      });
+  }, []);
+
   if (screen === 'add') {
     return (
       <View style={styles.root}>
@@ -283,6 +421,29 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
         <InvoicesScreen
           invoices={books.invoices}
           onCreate={() => setScreen('create-invoice')}
+          onBack={() => setScreen('ledger')}
+          onShare={onShareInvoice}
+          sharingInvoiceId={sharingInvoiceId}
+          shareError={shareError}
+        />
+        <StatusBar style="auto" />
+      </View>
+    );
+  }
+
+  if (screen === 'income') {
+    return (
+      <View style={styles.root}>
+        <IncomeScreen
+          monthly={income?.summary.monthly ?? []}
+          totalFiat={income?.summary.statement.totalFiat ?? null}
+          unvaluedNote={exportError ?? incomeError ?? income?.note ?? null}
+          internalNote={income?.internal ?? null}
+          rowCount={income?.summary.statement.rows.length ?? 0}
+          loading={incomeLoading}
+          exporting={exporting}
+          onExport={onExportCsv}
+          onRefresh={() => void loadIncome()}
           onBack={() => setScreen('ledger')}
         />
         <StatusBar style="auto" />
@@ -315,6 +476,7 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
         onRefresh={onRefresh}
         onAddAddress={() => setScreen('add')}
         onOpenInvoices={() => setScreen('invoices')}
+        onOpenIncome={onOpenIncome}
         openInvoiceCount={books.invoices.filter((v) => v.status !== 'paid').length}
       />
       <StatusBar style="auto" />

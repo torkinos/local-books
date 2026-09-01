@@ -28,12 +28,15 @@ export {
   normalizeTransactions,
 } from './normalize/index.js';
 
-export { sortOps, dedupOps, makeOpId, stableStringify, opsAsOf } from './oplog/index.js';
+export { sortOps, makeOpId, stableStringify } from './oplog/index.js';
 
 export { invoiceTotal, InvalidLineItemError } from './invoice/index.js';
 
 export { transferRequestUrl } from './pay/index.js';
 export type { TransferRequest } from './pay/index.js';
+
+export { invoiceDoc, InvoiceTotalMismatchError } from './doc/index.js';
+export type { InvoiceDocLine, InvoiceDocModel, InvoiceRenderableDoc } from './doc/index.js';
 
 export { matchByReference, amountAgreement } from './match/index.js';
 export type { MatchCandidate, MatchTier, HeuristicMatchInput, HeuristicMatcher } from './match/index.js';
@@ -59,6 +62,7 @@ export {
 } from './value/index.js';
 
 export {
+  assembleIncomeRows,
   buildIncomeStatement,
   monthlyTotalsPerClient,
   toCsv,
@@ -67,4 +71,9 @@ export {
   isoDate,
   CSV_COLUMNS,
 } from './report/index.js';
-export type { IncomeStatement, IncomeRow, MonthlyClientTotal } from './report/index.js';
+export type {
+  BuildStatementOptions,
+  IncomeStatement,
+  IncomeRow,
+  MonthlyClientTotal,
+} from './report/index.js';

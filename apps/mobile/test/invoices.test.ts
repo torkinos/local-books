@@ -224,6 +224,23 @@ describe('autoMatchOps', () => {
     expect(autoMatchOps(state, AT)).toHaveLength(0);
   });
 
+  it('D14 gate 2 counts human-REJECTED claims: a rejected duplicate still blocks its clean twin', () => {
+    // The client paid twice and the human already rejected one payment as the
+    // duplicate. Gate 3 bars only the rejected pair itself; it is gate 2's count
+    // over EVERY claim -- rejected ones included -- that keeps the surviving twin
+    // out of auto-apply. Counting only live candidates here would let the human's
+    // rejection of one payment silently auto-confirm the other, converting a
+    // recorded "a human decides which" into a machine decision.
+    const clean = paymentEvent({ signature: 'pay-sig-1' });
+    const dupe = paymentEvent({ signature: 'pay-sig-2', slot: 11 });
+    const reject = matchRejectedOp(REF, dupe.signature, dupe.instructionIndex, asUnixSeconds(AT + 50));
+
+    const state = project([...baseOps, reject], [clean, dupe]);
+    expect(state.rejectedMatches.size).toBe(1); // the rejection is on the books
+    expect(state.unmatchedEvents).toHaveLength(2); // both payments still claim REF
+    expect(autoMatchOps(state, asUnixSeconds(AT + 100))).toEqual([]);
+  });
+
   it('ignores paid invoices: a later payment with the same reference stays an unexplained deposit', () => {
     const settle = paymentEvent({ signature: 'pay-sig-1' });
     const settleOps = autoMatchOps(project(baseOps, [settle]), AT);

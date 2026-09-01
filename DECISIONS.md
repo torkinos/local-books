@@ -239,9 +239,16 @@ gets revised before anything is built on top of it.
 > demo shape — watch a new wallet, then pay it). Both pinned in `backfill.test.ts`;
 > `BackfillCheckpoint.complete` is documented as NOT a one-way latch.
 
-## D9 — Endpoint order is fixed (publicnode → mainnet-beta → user RPC), no JSON-RPC batching
+## D9 — Endpoint order is fixed (user RPC when set → publicnode → mainnet-beta), no JSON-RPC batching
 
 **Date:** 2026-08-23 · **Status:** accepted — from S1 measurements
+
+> **2026-09-01 (heading reconciled):** the T9 adapter was built and tested with a
+> user-supplied RPC URL FIRST in the failover list when one is configured
+> (`rpc.ts mainnetEndpoints`): a URL the user typed in is the endpoint they chose,
+> and it is not rate-limited like the public pool. The original heading listed it
+> last and contradicted the shipped order; the body below (public-pool ranking, the
+> error-copy remedy, no batching) was always consistent with the code and stands.
 
 S1 (`spikes/01-rpc-backfill.md`) found the free public pool is exactly two endpoints,
 and they are not peers: publicnode sustains ~5 tx/s of `getTransaction` with zero 429s
@@ -429,3 +436,106 @@ a tax-relevant ledger is not.
 **Revisit if:** the W5 polish pass adds the confirm/reject UI — gates stay, but
 under/over candidates should then be *offered* with the shortfall labeled, not
 merely left in the deposits list.
+
+## D15 — NBG rates: the endpoint's own effectivity model, verbatim strings, Georgian receipt days
+
+**Date:** 2026-09-01 · **Status:** accepted — T23
+
+The RatePort contract says "the rate actually effective on that date, or throw."
+NBG's date-parameterized endpoint already speaks that model: asked for a Sunday or a
+holiday it returns the latest rate whose `validFromDate` is on or before the
+requested day — a Friday rate IS the official weekend rate, so accepting it is
+correct, not nearby-day substitution. What the adapter must never do is invent that
+substitution itself: offline with nothing cached for the day, it throws; it never
+serves a neighbouring day's cached row. (Live probe 2026-09-01 pinned as fixtures:
+weekday, weekend-carry, and holiday-carry responses.)
+
+Decisions inside that frame, each argued by a failure it prevents:
+
+1. **`rateFormated` verbatim, never the float `rate` field.** The response carries
+   both; only the decimal string ever touches money (floats on money are banned
+   repo-wide). A fixture where the two fields disagree pins that the float is never
+   consulted.
+2. **A zero rate is refused, twice.** `"0.0000"` is publishable garbage, not a
+   price: accepted, it would value a whole day's income at 0.00 GEL as *valued*
+   rows (no banner) and first-write-wins caching would keep it forever. The adapter
+   throws before caching; the cache ALSO refuses to serve a zero row (corruption).
+3. **`validFromDate` is parsed as a date-part pattern, never `Date.parse`.** A
+   zone-less timestamp parses as device-LOCAL time; on the UTC+4 devices this app
+   ships to, midnight becomes 20:00 the previous day, mis-keying the dual write and
+   poisoning the neighbouring day's cache row permanently.
+4. **Receipt days are GEORGIAN calendar days (+4h, DST abolished 2005).** blockTime
+   is an instant; its UTC date books a payment landing 00:00–04:00 Tbilisi to the
+   previous day and values it at the previous day's rate. `receiptDateKey` converts
+   instant → Tbilisi day, matching both the filing's notion of receipt date and
+   NBG's own day boundaries. The income report's date/month labels use the same
+   calendar (D16), so rate days and report days can never disagree.
+5. **The cache is a plain (unencrypted) SQLite DB, first-write-wins.** Official
+   rates are public and re-fetchable — no secret to protect, and a lost books key
+   (D12) must not take the rate history with it. First-write-wins (INSERT OR
+   IGNORE) is the audit-trail stance: a rate a filing already used is never
+   rewritten by a later re-fetch, and the weekend dual-write (requested day + the
+   rate's own day) leans on that immutability.
+6. **Future receipt dates throw before cache and fetch.** NBG would happily answer
+   a future date with today's rate — which would then be cached under a date it was
+   never effective on.
+
+**Revisit if:** a second fiat lands (the GEL-only gate and the +4h constant are the
+two places that assume Georgia), or NBG restates a published rate (first-write-wins
+would then need an explicit, user-visible correction path).
+
+## D16 — Valuations are recomputed, never stored; internal transfers are not income
+
+**Date:** 2026-09-01 · **Status:** accepted — T24–T26 wiring
+
+Valuations are a pure function of (event, cached rate): `valueEvents` recomputes
+them when the income screen opens, and the rate cache (D15) is the only persisted
+piece. No valuations table, no staleness, nothing to migrate — and rebuild (D4)
+gets valuation correctness for free. Failures are memoized per receipt day within a
+pass: the rate cache remembers only successes, so without the memo an offline month
+would re-fetch the same failing date once per payment, each bounded only by the
+request timeout.
+
+The statement excludes, and counts, **internal transfers**: an incoming row whose
+counterparty is one of the user's OWN addresses (every address ever watched plus
+every invoice payTo — the same set `rebuild()` loads). D10 keeps both legs of a
+business→savings move as ledger facts, which is correct for the LEDGER; booking the
+in-leg as income would inflate the turnover a Georgian 1%-regime filing pays tax
+on. The exclusion is surfaced (`internalCount` + a screen note), never silent —
+same stance as `unvaluedCount`.
+
+Screen totals, monthly groups, and the exported CSV all derive from ONE statement
+built in `incomeSummary` — "totals match the CSV to the cent" is structural, and
+the statement's period end clears max(device now, newest blockTime) so a device
+clock running behind chain time cannot silently drop the freshest payment.
+
+**Revisit if:** valuation ever becomes expensive enough to precompute (it is one
+cached lookup per day today), or a user legitimately invoices one of their own
+watched addresses (the exclusion would then need a human override).
+
+## D17 — Documents: core builds models, the app renders them; only invoices become PDFs in v0.1
+
+**Date:** 2026-09-01 · **Status:** accepted — T19/T20 code halves
+
+`invoiceDoc` (core) turns an `InvoiceCreatedOp` into a renderable model: amounts
+formatted from exact bigints in core, line totals recomputed and asserted against
+the stored total (a mismatch throws rather than printing a document that disagrees
+with itself), and the Solana Pay URL built once — the QR payload and the printed
+total come from the same `TokenAmount`, so the page can never ask for a different
+number than it shows.
+
+The renderer (`invoiceHtml` + the DocPort adapter) owns layout only: every model
+string is HTML-escaped (pinned field-by-field), the QR is a locally generated SVG
+(`qrcode`, pure JS — no canvas, no native module), and the page references no
+external resource of any kind — a shared PDF must render identically offline and
+years later. expo-print/expo-sharing are loaded dynamically inside the two DocPort
+methods, which is what lets the entire HTML path run under vitest in Node.
+
+`RenderableDoc.kind` gates hard: income-statement PDFs are on the post-grant
+deferred list, and the adapter throws on them rather than half-rendering. The CSV
+export shares through the same native sheet but is not a document render — it is
+`toCsv` output written to a cache file, and the strict-parser tests own its shape.
+
+**Revisit if:** S3 (Phantom scan of the printed/shared QR) surfaces layout or
+error-correction problems — QR module size and margin live in one place in the
+DocPort adapter.

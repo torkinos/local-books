@@ -23,6 +23,7 @@ import { invoiceTokens } from '../tokens.js';
 import { shortAddress } from './format.js';
 import type { LineItemInput } from './invoiceForm.js';
 import { validateInvoiceDraft, ymdAfterDays } from './invoiceForm.js';
+import { createSubmitOnce, type SubmitOnce } from './submitOnce.js';
 
 export interface CreateInvoiceSubmission {
   readonly clientName: string;
@@ -63,11 +64,26 @@ export function CreateInvoiceScreen({
   const [payTo, setPayTo] = useState<Address | null>(watched[0]?.address ?? null);
   const [errors, setErrors] = useState<readonly string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  // Synchronous latch: setState is async, so `submitting` alone lets a double-tap
-  // race through and mint TWO invoices -- each with its own fresh reference key,
-  // so content addressing cannot collapse them, and no compensating op exists yet
-  // to void one. Left set on success (the screen navigates away).
-  const submittingRef = useRef(false);
+  // Synchronous latch (submitOnce.ts): setState is async, so `submitting` alone lets
+  // a double-tap race through and mint TWO invoices -- each with its own fresh
+  // reference key, so content addressing cannot collapse them, and no compensating
+  // op exists yet to void one. Left set on success (the screen navigates away).
+  // Held in a ref so the latch survives re-renders; the hooks close over React's
+  // stable setState functions, so first-render capture is fine.
+  const guardRef = useRef<SubmitOnce | null>(null);
+  if (guardRef.current === null) {
+    guardRef.current = createSubmitOnce({
+      onStart: () => {
+        setErrors([]);
+        setSubmitting(true);
+      },
+      onFailure: (cause) => {
+        setSubmitting(false);
+        setErrors([cause instanceof Error ? cause.message : String(cause)]);
+      },
+    });
+  }
+  const guard = guardRef.current;
 
   const token = tokens[tokenIndex] ?? tokens[0]!;
 
@@ -77,28 +93,23 @@ export function CreateInvoiceScreen({
   };
 
   const submit = async (): Promise<void> => {
-    if (submittingRef.current) return;
+    // Latch first, validation second, exactly as before the extraction: a tap that
+    // lands mid-flight must do nothing at all, not re-run validation.
+    if (guard.inFlight) return;
     const validated = validateInvoiceDraft({ clientName, lineItems: lines, token, dueDateText, payTo });
     if (!validated.ok) {
       setErrors(validated.errors);
       return;
     }
-    submittingRef.current = true;
-    setErrors([]);
-    setSubmitting(true);
-    try {
-      await onSubmit({
+    await guard.submit(() =>
+      onSubmit({
         clientName: validated.clientName,
         lineItems: validated.lineItems,
         token,
         dueDate: validated.dueDate,
         payTo: validated.payTo,
-      });
-    } catch (cause) {
-      submittingRef.current = false;
-      setSubmitting(false);
-      setErrors([cause instanceof Error ? cause.message : String(cause)]);
-    }
+      }),
+    );
   };
 
   return (
