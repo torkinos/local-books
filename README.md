@@ -48,6 +48,36 @@ and applies to every build — including the APK, in plain text, so never share 
 built with a keyed URL. `apps/mobile/.env.example` walks through both
 (DECISIONS.md D18).
 
+### Release build (Android)
+
+Release builds are signed with a keystore that lives on the build machine, wired in
+by `apps/mobile/plugins/withReleaseSigning.js` at prebuild time. Once, on that machine:
+
+```sh
+mkdir -p ~/.local-books
+keytool -genkeypair -v -keystore ~/.local-books/release.keystore -alias localbooks \
+  -keyalg RSA -keysize 2048 -validity 10000
+cat >> ~/.gradle/gradle.properties <<'EOF'
+LOCAL_BOOKS_RELEASE_STORE_FILE=/Users/YOU/.local-books/release.keystore
+LOCAL_BOOKS_RELEASE_STORE_PASSWORD=the-store-password
+LOCAL_BOOKS_RELEASE_KEY_ALIAS=localbooks
+LOCAL_BOOKS_RELEASE_KEY_PASSWORD=the-key-password
+EOF
+```
+
+Back the keystore up somewhere that is not this laptop: every future release must be
+signed with it or Android refuses to update the installed app. Then, per release:
+
+```sh
+cd apps/mobile
+grep -L EXPO_PUBLIC_RPC_URL .env 2>/dev/null || echo "REMOVE the keyed RPC URL from .env first"
+npx expo prebuild --platform android --clean # regenerates android/ with the plugin
+cd android && ./gradlew assembleRelease      # -> app/build/outputs/apk/release/app-release.apk
+```
+
+The build log prints which keystore signed it. The release build reads `.env`, never
+`.env.development`, so it is mainnet by construction.
+
 The repo is an npm-workspaces monorepo:
 
 - `packages/core` — the entire domain, pure TypeScript, zero runtime dependencies.
