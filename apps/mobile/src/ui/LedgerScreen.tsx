@@ -17,6 +17,8 @@ import type { AddressSyncState } from './syncStatus.js';
 import { syncStatusLine } from './syncStatus.js';
 
 export interface LedgerScreenProps {
+  /** Shown as a tag in the header when not mainnet, so a devnet build is unmistakable. */
+  readonly network: 'devnet' | 'mainnet';
   readonly watched: readonly WatchedAddressView[];
   /** Deduped, newest first, succeeded only -- the App prepares this. */
   readonly events: readonly ChainEvent[];
@@ -26,6 +28,8 @@ export interface LedgerScreenProps {
   readonly errorBanner: string | null;
   readonly onRefresh: () => void;
   readonly onAddAddress: () => void;
+  /** Stop watching (the App confirms first, then records address-unwatched). */
+  readonly onUnwatch: (address: Address) => void;
   readonly onOpenInvoices: () => void;
   readonly onOpenIncome: () => void;
   /** Open + overdue count, shown on the invoices button. */
@@ -33,6 +37,7 @@ export interface LedgerScreenProps {
 }
 
 export function LedgerScreen({
+  network,
   watched,
   events,
   syncStates,
@@ -40,6 +45,7 @@ export function LedgerScreen({
   errorBanner,
   onRefresh,
   onAddAddress,
+  onUnwatch,
   onOpenInvoices,
   onOpenIncome,
   openInvoiceCount,
@@ -49,7 +55,14 @@ export function LedgerScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Local Books</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Local Books</Text>
+          {network !== 'mainnet' && (
+            <View style={styles.networkTag} testID="network-tag">
+              <Text style={styles.networkTagText}>{network}</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.headerButtons}>
           <Pressable style={styles.invoicesButton} onPress={onOpenIncome} testID="income-button">
             <Text style={styles.invoicesButtonText}>Income</Text>
@@ -75,13 +88,22 @@ export function LedgerScreen({
         const status = syncStatusLine(syncStates.get(w.address));
         return (
           <View key={w.address} style={styles.addressRow}>
-            <Text style={styles.addressLabel}>{w.label}</Text>
-            <Text style={styles.addressValue}>{shortAddress(w.address)}</Text>
-            {status !== null && (
-              <Text style={styles.syncStatus} testID={`sync-status-${w.address}`}>
-                {status}
-              </Text>
-            )}
+            <View style={styles.addressBody}>
+              <Text style={styles.addressLabel}>{w.label}</Text>
+              <Text style={styles.addressValue}>{shortAddress(w.address)}</Text>
+              {status !== null && (
+                <Text style={styles.syncStatus} testID={`sync-status-${w.address}`}>
+                  {status}
+                </Text>
+              )}
+            </View>
+            <Pressable
+              onPress={() => onUnwatch(w.address)}
+              hitSlop={8}
+              testID={`unwatch-${w.address}`}
+            >
+              <Text style={styles.unwatch}>Remove</Text>
+            </Pressable>
           </View>
         );
       })}
@@ -159,9 +181,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   title: {
     fontSize: 22,
     fontWeight: '700',
+  },
+  networkTag: {
+    backgroundColor: '#fff7e6',
+    borderColor: '#e8d5a8',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  networkTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8a5a00',
+    textTransform: 'uppercase',
   },
   headerButtons: {
     flexDirection: 'row',
@@ -191,10 +232,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#d8d8e0',
+  },
+  addressBody: {
+    flex: 1,
+  },
+  unwatch: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#b3261e',
   },
   addressLabel: {
     fontSize: 14,

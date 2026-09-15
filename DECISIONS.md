@@ -539,3 +539,142 @@ export shares through the same native sheet but is not a document render — it 
 **Revisit if:** S3 (Phantom scan of the printed/shared QR) surfaces layout or
 error-correction problems — QR module size and margin live in one place in the
 DocPort adapter.
+
+## D18 — Network and RPC endpoint are build-time flags; mainnet is the default
+
+**Date:** 2026-09-14 · **Status:** accepted — W5 cut line
+
+`NETWORK` had been a hardcoded `'devnet'` constant waiting for a settings screen
+that no task ever scheduled, which meant a Release APK built from the tree could
+only ever watch devnet. Two days before freeze the cheapest correct fix is a
+build-time switch, not a screen: `apps/mobile/src/config.ts` reads
+`EXPO_PUBLIC_NETWORK` (Expo inlines `EXPO_PUBLIC_*` at bundle time), and only the
+literal `devnet` selects devnet — anything else, including absence and typos, is
+mainnet, so a mistake cannot ship a devnet build to a real user. The demo path
+sets it in `apps/mobile/.env.development`, which Expo loads for debug builds and
+`expo start` only — plain `.env` is loaded for EVERY mode, release included, so
+the devnet line must never live there (the review caught the first draft making
+exactly that mistake). A release build therefore stays mainnet with nothing to
+remember to delete. The ledger header shows a `DEVNET` tag so footage and
+testers can tell which build they hold.
+
+The user-supplied RPC URL (PROJECT.md line 72, S1's GO condition 3) is likewise
+`EXPO_PUBLIC_RPC_URL` in `.env` (all builds), placed first in the failover list
+(D9). It cannot be validated at build time — babel inlines whatever the env holds
+— and a throw at module evaluation would close a release build on launch before
+any screen could explain, so an invalid value is IGNORED with a logcat warning
+and the public endpoints are used. The URL is baked into the APK as a plain
+string, API key included: an APK built with a keyed URL must never be shared.
+The in-app settings screen D9/D13 assumed is deferred post-grant; the rate-limit
+copy therefore no longer promises a paste-in remedy.
+
+**Cost:** a power user rebuilds to use their own endpoint, and must keep keyed
+builds to themselves. Acceptable for a v0.1 whose users are the pilot cohort.
+
+**Revisit if:** the pilot cohort hits public-endpoint throttling in practice — that
+is the signal the settings screen has earned its place.
+
+## D19 — Token accounts are derived locally and paged alongside the wallet
+
+**Date:** 2026-09-14 · **Status:** accepted — bug fix inside T11/T16 scope
+
+`getSignaturesForAddress(owner)` returns only transactions whose account list names
+the owner. A plain SPL `transfer`/`transferChecked` into an EXISTING token account
+names the token account and the payer — never the recipient wallet — so
+owner-only paging sees the first USDC payment (its ATA-create instruction names
+the owner) and none after it. PROJECT.md line 68 always said "track associated
+token accounts"; the code did not.
+
+The fix: `sync/ata.ts` derives the owner's associated token account for each
+invoice mint of the running network (USDC/USDT on mainnet, devnet USDC on devnet)
+with the on-chain program's own rule — sha256 over the seeds, first bump from 255
+down whose hash is off the ed25519 curve — pinned against two real mainnet ATAs in
+the normalizer fixture. `sync/wallet.ts` then pages the owner and each ATA in
+turn. Each address keeps its own checkpoint (D8), but the ATA passes normalize and
+store events under the OWNER (engine option `owner`): direction and internal-move
+detection already resolve via token-balance owners, dedup identity is per watched
+wallet (D10), and every consumer downstream keeps seeing one address. The ATA's
+checkpoint row is keyed `<ata>@<owner>`, not `<ata>`: the app accepts any 32-byte
+key as a watched address, so a user can watch a token account directly AND its
+wallet, and those are two walks with two event stores — a shared cursor would let
+the first walk's "complete" skip the second's entire history.
+
+Derived, not enumerated: `getTokenAccountsByOwner` is an indexed method that
+publicnode gates behind an API key (probed 2026-09-14), and enumerating would also
+drag in every dust-airdrop account on a mainnet wallet. Derivation is offline,
+bounded to the stablecoins the product values, and costs one extra
+`getSignatures` per mint per sync. Classic Token program only; token-2022 derives
+differently and stays deferred.
+
+**Cost:** two more RPC calls per sync pass on mainnet. Within S1's measured budget.
+
+**Revisit if:** S2 shows a wallet app paying into a non-associated token account
+(then enumeration is needed after all), or token-2022 stablecoins arrive.
+
+## D20 — No background sync in v0.1; the framing says "while the app is open"
+
+**Date:** 2026-09-14 · **Status:** accepted — W5 cut line
+
+README, PROJECT.md line 62, the App docstring, and T29 all promised "periodically
+in the background on Android". Nothing implemented it: sync runs on launch, on
+foreground, on pull-to-refresh, and on a 30 s timer gated on the app being active.
+Adding `expo-background-task`/WorkManager two days before freeze would be a new
+native dependency, a fresh prebuild, and an untested execution path on the one
+device pass left. The honest option is the cheap one: the copy now says the app
+"checks when you open it, and while it is open", every document agrees, and
+WorkManager sync moves to the post-grant list. The line-62 rule stands: never
+promise real-time.
+
+**Cost:** a payment landing while the app is closed shows up on the next open, not
+before. That was already true.
+
+**Revisit if:** pilot users report missing a payment because they did not open the
+app — the WorkManager task then has a measured reason to exist.
+
+## D21 — Reference candidates automation refuses get a human tap: confirm or reject
+
+**Date:** 2026-09-14 · **Status:** accepted — closes D14's revisit trigger
+
+D14's four gates deliberately leave under-, over-, and wrong-token payments,
+ambiguous batched settlements, and second claims on one invoice unbooked. Until
+now nothing offered them to anyone: `match-rejected` had no producer, and an
+invoice underpaid by a fee stayed open forever. The invoices screen now lists
+these under "Needs your decision" with the shortfall or overage named
+(`ui/pendingCopy.ts`), and two buttons that say what they write: "Mark paid"
+records `match-confirmed` with `via: 'reference-confirmed-by-user'` (a new value,
+so the audit trail distinguishes a human's booking from automation's), "Not this
+invoice" records `match-rejected`, which D4's projection already treats as barring
+automation from the pair for good. `pendingMatches` is the exact complement of
+`autoMatchOps` minus rejected pairs; both run on every refresh, automation first.
+
+Rejected pairs are not offered again in v0.1: D4 allows a human to re-confirm one,
+but a list that keeps asking about a decision already made would be the machine
+relitigating the human. The deposit stays visible in the ledger. When the OTHER
+claim on an invoice was the one rejected, the survivor is still offered (automation
+stays out: a rejected claim still counts under D14 gate 2) with copy that says so
+rather than asking the human to choose between one thing.
+
+One transfer settles at most one invoice: the projection now enforces it (a later
+confirm of the same transfer to a different invoice supersedes the earlier one,
+consistent with later-decision-wins everywhere else in the fold). Before this,
+the two pairings of one transfer inside an ambiguous batch could both be confirmed
+and both invoices would read "paid" on one payment.
+
+**Cost:** confirming an underpayment marks the invoice paid without recording the
+shortfall as a receivable. The op log holds both amounts, so a later "partially
+paid" status can be derived without migration.
+
+**Revisit if:** the pilot cohort asks for partial-payment tracking, or tier b
+lands (its candidates plug into the same list with `autoApplicable: false`).
+
+## D22 — The repository is private until the release is ready
+
+**Date:** 2026-09-14 · **Status:** accepted — user decision
+
+The repo went public in W1 (T1) and was taken private during the build. It stays
+private for now. The grant deliverable (PROJECT.md line 115: "public repo") is
+unchanged: it flips back to public with the v0.1 Release (T33/T34), before grant
+review.
+
+**Cost:** the CI badge 404s and no outside eyes until then. **Revisit if:** the
+grant reviewers ask for repo access before Sep 27.

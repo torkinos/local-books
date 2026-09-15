@@ -59,7 +59,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 - **Mobile-first: React Native (Expo + prebuild/dev client).** Android is the primary target (better background execution, Solana dApp Store distribution later, dominant in the beachhead market). iOS follows with known limitations.
 - **Desktop later** (post-grant), sharing the same core, as the accountant-facing read-only surface.
 - **Architecture consequence:** all domain logic (ingestion, normalization, matching, valuation, event log, report generation) lives in a **pure-TypeScript core package with zero UI/platform dependencies**. The RN app is a shell over it; the future desktop app reuses it unchanged.
-- **Accepted mobile constraint:** serverless means no push notifications (APNs/FCM require a sender). Payment detection is on-app-open plus best-effort background: Android WorkManager periodic sync (near-real-time feasible), iOS BGAppRefreshTask (opportunistic only). In-app framing: "checks when you open, and periodically in the background on Android" — never promise real-time.
+- **Accepted mobile constraint:** serverless means no push notifications (APNs/FCM require a sender). Payment detection is on-app-open plus, post-grant, best-effort background: Android WorkManager periodic sync (near-real-time feasible), iOS BGAppRefreshTask (opportunistic only). v0.1 ships foreground-only (DECISIONS.md D20). In-app framing: "checks when you open the app, and while it is open" — never promise real-time.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 
 - User adds Solana address(es); track associated token accounts (ATAs) for USDC/USDT and other SPL mints.
 - Backfill: `getSignaturesForAddress` (paginated) → `getTransaction` (jsonParsed). Extract SOL system transfers, SPL token transfers (pre/post token balances), memo contents, blockTime, counterparty, signature.
-- Incremental: refresh on app open + background job (see platform constraints). No WebSocket dependency.
+- Incremental: refresh on app open and while the app is open (background job post-grant, see platform constraints). No WebSocket dependency.
 - Backfill must be **resumable/checkpointed** (app can be killed mid-sync) and mindful of metered connections (chunked; wifi-preferred option).
 - RPC strategy: rotation/failover across public endpoints; power users can paste their own endpoint (e.g. Helius). No backend of ours anywhere.
 - Normalize into an append-only ledger-event log; idempotent; dedup by signature.
@@ -123,7 +123,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 5. Heuristic matching tier (b) — first to defer
 6. Categorization UX beyond minimal — second to defer
 
-**Deferred post-grant:** heuristic-matching polish, iOS hardening, P2P multi-device sync, desktop/accountant surface, OCR, NL queries, DAO/multisig ingestion, token-2022 edge cases, Koinly-compatible CSV, Solana dApp Store submission, monthly report PDFs beyond the basic income statement.
+**Deferred post-grant:** heuristic-matching polish, iOS hardening, P2P multi-device sync, desktop/accountant surface, OCR, NL queries, DAO/multisig ingestion, token-2022 edge cases, Koinly-compatible CSV, Solana dApp Store submission, monthly report PDFs beyond the basic income statement, periodic background sync (WorkManager; D20), an in-app settings screen for the RPC endpoint (build-time only in v0.1; D18), categorization UI.
 
 ## Known risks (de-risk in week 1)
 

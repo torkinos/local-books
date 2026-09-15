@@ -16,8 +16,9 @@ Three things it will never do:
 - **Talk to our servers.** There are none. No backend, no accounts, no telemetry of any
   kind. The app's only network traffic is Solana public RPC (or your own RPC endpoint)
   and the National Bank of Georgia's public daily-rate endpoint for valuation.
-- **Promise real-time.** It checks when you open the app, and periodically in the
-  background on Android.
+- **Promise real-time.** It checks when you open the app and while it is open — pull
+  to refresh any time. Background sync while the app is closed is on the post-grant
+  list.
 
 ## Status
 
@@ -33,12 +34,19 @@ in the final weeks. See [PLAN.md](./PLAN.md) for the week-by-week plan and
 
 ## Build
 
-Requires Node 20+.
+Requires Node 24 (pinned in `.nvmrc`; the mobile test suite uses `node:sqlite`).
 
 ```sh
 npm install
 npm run check   # typecheck + lint + tests
 ```
+
+The app is built for **mainnet** by default. For the devnet demo path, put
+`EXPO_PUBLIC_NETWORK=devnet` in `apps/mobile/.env.development` (debug builds only;
+a release build never reads it). A personal RPC endpoint goes in `apps/mobile/.env`
+and applies to every build — including the APK, in plain text, so never share an APK
+built with a keyed URL. `apps/mobile/.env.example` walks through both
+(DECISIONS.md D18).
 
 The repo is an npm-workspaces monorepo:
 

@@ -80,6 +80,7 @@ describe('syncStatusLine', () => {
   const ADDRESS = asAddress('Addr');
   const progress = (over: Partial<SyncProgress>): SyncProgress => ({
     address: ADDRESS,
+    owner: ADDRESS,
     endpointLabel: 'publicnode',
     mode: 'backfill',
     phase: 'paging',

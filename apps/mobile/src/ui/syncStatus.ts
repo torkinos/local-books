@@ -40,10 +40,13 @@ export function syncStatusLine(state: AddressSyncState | undefined): string | nu
 
   // Initial backfill: show real counts, never a fake percentage -- total history
   // size is unknown until the walk completes, and an invented bar would be a lie.
+  // A wallet's token accounts are walked after the wallet itself (D19); say so,
+  // because their page counter starts over and would otherwise look like a regression.
+  const what = p.address === p.owner ? 'history' : 'token-account history';
   if (p.phase === 'hydrating' && p.pageHydration !== undefined) {
-    return `Backfilling history — page ${p.pages}: transaction ${p.pageHydration.fetched} of ${p.pageHydration.total}…`;
+    return `Backfilling ${what} — page ${p.pages}: transaction ${p.pageHydration.fetched} of ${p.pageHydration.total}…`;
   }
   return p.pages === 0
-    ? 'Backfilling history…'
-    : `Backfilling history — ${p.pages} ${p.pages === 1 ? 'page' : 'pages'}, ${p.transactionsFetched} transactions so far…`;
+    ? `Backfilling ${what}…`
+    : `Backfilling ${what} — ${p.pages} ${p.pages === 1 ? 'page' : 'pages'}, ${p.transactionsFetched} transactions so far…`;
 }
