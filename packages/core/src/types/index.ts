@@ -127,10 +127,14 @@ export interface MatchConfirmedOp extends OpBase {
   /**
    * How the match was reached. Recorded because PROJECT.md line 81 forbids
    * auto-confirming heuristic matches -- an auditor must be able to see which matches
-   * a human actually approved.
+   * a human actually approved. 'reference' is automation (D14's four gates passed);
+   * 'reference-confirmed-by-user' is a reference candidate automation refused (a
+   * shortfall, an ambiguous transaction) that a human booked by hand (D21).
    */
-  readonly via: 'reference' | 'heuristic-confirmed-by-user';
+  readonly via: MatchVia;
 }
+
+export type MatchVia = 'reference' | 'reference-confirmed-by-user' | 'heuristic-confirmed-by-user';
 
 export interface MatchRejectedOp extends OpBase {
   readonly type: 'match-rejected';

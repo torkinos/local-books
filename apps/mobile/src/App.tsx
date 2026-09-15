@@ -1,15 +1,20 @@
 /**
  * App shell: bootstraps the encrypted store, assembles ports, and orchestrates the
- * two v0.1 screens (T15) around the sync engine.
+ * five v0.1 screens around the sync engine.
  *
- * Sync policy is PROJECT.md line 62 verbatim -- "checks when you open, and
- * periodically in the background on Android": a sync pass runs on launch, when the
- * app returns to the foreground, on pull-to-refresh, and on a slow foreground timer.
- * No real-time promise anywhere. Progress survives backgrounding because the engine
- * checkpoints every page (D8); coming back just resumes from storage.
+ * Sync policy is PROJECT.md line 62 -- "checks when you open the app, and while it
+ * is open": a sync pass runs on launch, when the app returns to the foreground, on
+ * pull-to-refresh, and on a slow foreground timer. Nothing runs while the app is
+ * backgrounded (WorkManager sync is post-grant, D20), and no real-time promise is
+ * made anywhere. Progress survives backgrounding because the engine checkpoints
+ * every page (D8); coming back just resumes from storage.
+ *
+ * Each watched wallet is synced together with its stablecoin token accounts (D19,
+ * sync/wallet.ts): owner-only paging cannot see a USDC payment into an existing
+ * account, which is most of them.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import type {
   Address,
@@ -28,12 +33,23 @@ import {
   referenceKeys,
   rpcEndpoints,
   KeyLostError,
+  NETWORK,
 } from './ports.js';
-import { addressWatchedOp, invoiceCreatedOp } from './ops.js';
-import { autoMatchOps } from './matching.js';
+import {
+  addressUnwatchedOp,
+  addressWatchedOp,
+  invoiceCreatedOp,
+  matchConfirmedByUserOp,
+  matchRejectedOp,
+} from './ops.js';
+import { autoMatchOps, pendingMatches } from './matching.js';
+import type { PendingMatch } from './matching.js';
 import { shareTextFile } from './adapters/files.js';
-import { syncAddress } from './sync/engine.js';
+import { syncWallet } from './sync/wallet.js';
 import type { SyncResult } from './sync/engine.js';
+import { watchedMintsFor } from './tokens.js';
+import { backTarget } from './ui/navigation.js';
+import type { Screen } from './ui/navigation.js';
 import { valueEvents, FIAT } from './valuation.js';
 import { AddAddressScreen } from './ui/AddAddressScreen.js';
 import type { CreateInvoiceSubmission } from './ui/CreateInvoiceScreen.js';
@@ -49,11 +65,15 @@ import type { AddressSyncState } from './ui/syncStatus.js';
 const FOREGROUND_POLL_MS = 30_000;
 /** During a long backfill, how often the ledger list refreshes from storage. */
 const REFRESH_THROTTLE_MS = 2_000;
+/** Mints whose associated token accounts are paged alongside every wallet (D19). */
+const WATCHED_MINTS: readonly Address[] = watchedMintsFor(NETWORK);
 
 interface Books {
   readonly watched: readonly WatchedAddressView[];
   readonly events: readonly ChainEvent[];
   readonly invoices: readonly InvoiceView[];
+  /** Reference payments automation refused; a human books or dismisses them (D21). */
+  readonly pending: readonly PendingMatch[];
 }
 
 type Boot =
@@ -63,9 +83,13 @@ type Boot =
 
 export default function App(): React.JSX.Element {
   const [boot, setBoot] = useState<Boot>({ status: 'loading' });
+  // Bumped by the failure screen's retry; a transient open failure (a storage
+  // hiccup, a slow keystore) should not need a force-quit to try again.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    setBoot({ status: 'loading' });
     openEncryptedStorage().then(
       (storage) => {
         if (alive) setBoot({ status: 'ready', storage });
@@ -77,7 +101,7 @@ export default function App(): React.JSX.Element {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [attempt]);
 
   if (boot.status === 'loading') {
     return (
@@ -88,12 +112,25 @@ export default function App(): React.JSX.Element {
     );
   }
   if (boot.status === 'failed') {
-    return <BootFailure error={boot.error} />;
+    return <BootFailure error={boot.error} onRetry={() => setAttempt((n) => n + 1)} />;
   }
   return <Main storage={boot.storage} />;
 }
 
-function BootFailure({ error }: { readonly error: unknown }): React.JSX.Element {
+/**
+ * The boot dead-end, made a fork in the road. A generic failure offers a retry. A
+ * lost key (D12) cannot be retried into existence, so it says exactly what starting
+ * over takes: clearing the app's data from Android settings. The app never deletes
+ * the books itself -- that is D12's whole point -- but it must not leave the user
+ * with an error and no next step either.
+ */
+function BootFailure({
+  error,
+  onRetry,
+}: {
+  readonly error: unknown;
+  readonly onRetry: () => void;
+}): React.JSX.Element {
   const keyLost = error instanceof KeyLostError;
   return (
     <View style={styles.center}>
@@ -101,16 +138,26 @@ function BootFailure({ error }: { readonly error: unknown }): React.JSX.Element 
       <Text style={styles.errorBody}>
         {error instanceof Error ? error.message : String(error)}
       </Text>
+      {keyLost ? (
+        <Text style={styles.errorHint} testID="key-lost-hint">
+          To start fresh: Android Settings › Apps › Local Books › Storage › Clear data.
+          This deletes the unreadable books, invoices included, and the next launch
+          creates new ones. If you have a backup of this phone with the key still on
+          it, restore that instead.
+        </Text>
+      ) : (
+        <Pressable style={styles.retryButton} onPress={onRetry} testID="boot-retry">
+          <Text style={styles.retryText}>Try again</Text>
+        </Pressable>
+      )}
       <StatusBar style="auto" />
     </View>
   );
 }
 
 function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element {
-  const [screen, setScreen] = useState<
-    'ledger' | 'add' | 'invoices' | 'create-invoice' | 'income'
-  >('ledger');
-  const [books, setBooks] = useState<Books>({ watched: [], events: [], invoices: [] });
+  const [screen, setScreen] = useState<Screen>('ledger');
+  const [books, setBooks] = useState<Books>({ watched: [], events: [], invoices: [], pending: [] });
   const [syncStates, setSyncStates] = useState<ReadonlyMap<Address, AddressSyncState>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
   // A failed refresh must not present as empty books: the ledger renders this as a
@@ -130,9 +177,15 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
   const [exportError, setExportError] = useState<string | null>(null);
   const [sharingInvoiceId, setSharingInvoiceId] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
+  // Match decisions (D21): one at a time, and a failed write says so in the banner.
+  const [deciding, setDeciding] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const watchedRef = useRef<readonly WatchedAddressView[]>([]);
-  const runningRef = useRef(new Set<Address>());
+  // One entry per in-flight wallet sync: its cancellation handle, and a promise that
+  // settles only when the run has fully drained (cancellation is cooperative -- the
+  // engine notices between chunks, so an aborted run can still be mid-request).
+  const runningRef = useRef(new Map<Address, { controller: AbortController; done: Promise<void> }>());
   const lastRefreshRef = useRef(0);
   const refreshQueueRef = useRef<Promise<void>>(Promise.resolve());
   // Latest-wins token for loadIncome: passes overlap (re-enter the screen while a
@@ -144,6 +197,7 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
   // the exact bug submitOnce.ts exists for (T18's double-invoice race).
   const exportLatchRef = useRef(false);
   const shareLatchRef = useRef(false);
+  const decisionLatchRef = useRef(false);
 
   const setSyncState = useCallback((address: Address, state: AddressSyncState): void => {
     setSyncStates((current) => {
@@ -202,6 +256,8 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
         // but are not ledger rows (same rule as projection's unmatched list).
         events: sortByRecency(dedupEvents(events)).filter((event) => event.succeeded),
         invoices: withOverdue(projection, clock.now()).invoices,
+        // Computed AFTER auto-match applied, so nothing here is automation's to do.
+        pending: pendingMatches(projection),
       });
     }
   }, [storage]);
@@ -210,20 +266,40 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
     setBooksError(error instanceof Error ? error.message : String(error));
   }, []);
 
-  /** One full sync for one address; loops while the driver hits its page budget. */
+  /**
+   * One full sync for one wallet -- the address and its stablecoin token accounts
+   * (D19); loops while the driver hits its page budget. Cancelled by unwatching.
+   */
   const syncOne = useCallback(
     async (address: Address): Promise<void> => {
-      if (runningRef.current.has(address)) return;
-      runningRef.current.add(address);
+      // A live run owns the address. A CANCELLED run (unwatch, then re-watch before
+      // it drained) is waited out instead of skipped, or the re-watched address
+      // would show a stale line and not sync until the next poll.
+      for (;;) {
+        const existing = runningRef.current.get(address);
+        if (existing === undefined) break;
+        if (!existing.controller.signal.aborted) return;
+        await existing.done;
+      }
+      const controller = new AbortController();
+      let finish = (): void => undefined;
+      const done = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      runningRef.current.set(address, { controller, done });
       try {
         let result: SyncResult;
         do {
-          result = await syncAddress(address, {
+          result = await syncWallet(address, WATCHED_MINTS, {
             endpoints: rpcEndpoints(),
             storage,
             clock,
+            signal: controller.signal,
             onProgress: (progress) => {
-              setSyncState(address, { phase: 'syncing', progress });
+              // The engine reports once more after the request it was awaiting
+              // returns; a cancelled run must not resurrect a removed row's status.
+              if (controller.signal.aborted) return;
+              setSyncState(progress.owner, { phase: 'syncing', progress });
               // Let rows appear DURING a long backfill, throttled so a fast
               // hydration loop does not thrash the list.
               if (Date.now() - lastRefreshRef.current > REFRESH_THROTTLE_MS) {
@@ -235,15 +311,22 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
             },
           });
           await refreshBooks();
-        } while (result.kind === 'page-budget-reached');
+        } while (result.kind === 'page-budget-reached' && !controller.signal.aborted);
+        // Unwatched mid-run: the row is gone, and a status line for it would be a
+        // ghost. The checkpoint stays, so re-watching resumes where this stopped.
+        if (controller.signal.aborted) return;
         setSyncState(address, { phase: 'idle', lastResult: result });
       } catch (error) {
+        if (controller.signal.aborted) return;
         setSyncState(address, {
           phase: 'failed',
           message: `Sync failed: ${error instanceof Error ? error.message : String(error)}`,
         });
       } finally {
-        runningRef.current.delete(address);
+        if (runningRef.current.get(address)?.controller === controller) {
+          runningRef.current.delete(address);
+        }
+        finish();
       }
     },
     [storage, refreshBooks, setSyncState],
@@ -272,6 +355,18 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
     };
   }, [syncAll]);
 
+  // Android hardware back / back-swipe: a sub-screen returns to its parent instead
+  // of the app quietly backgrounding itself; the ledger lets the system exit.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      const target = backTarget(screen);
+      if (target === null) return false;
+      setScreen(target);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [screen]);
+
   const onRefresh = useCallback((): void => {
     setRefreshing(true);
     void refreshBooks()
@@ -288,6 +383,104 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
       void syncOne(address);
     },
     [storage, refreshBooks, syncOne],
+  );
+
+  /**
+   * Stop watching an address. Confirmed first because it is one tap on a list row.
+   * Records address-unwatched (the projection drops the row; its events and any
+   * income booked from them stay -- see projection's rationale) and cancels the
+   * wallet's in-flight sync so the row does not keep reporting after it is gone.
+   */
+  const onUnwatch = useCallback(
+    (address: Address): void => {
+      const label = watchedRef.current.find((w) => w.address === address)?.label ?? address;
+      Alert.alert(
+        `Stop watching ${label}?`,
+        'Its history stays on this device and income already booked stays booked; the ' +
+          'address just leaves this list. You can watch it again later.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Stop watching',
+            style: 'destructive',
+            onPress: () => {
+              runningRef.current.get(address)?.controller.abort();
+              // Drop it from the poll list NOW: a timer tick landing before the
+              // op is written and re-read would otherwise start a fresh,
+              // un-cancelled sync for the address being removed.
+              watchedRef.current = watchedRef.current.filter((w) => w.address !== address);
+              void storage
+                .appendOps([addressUnwatchedOp(address, clock.now())])
+                .then(refreshBooks)
+                .then(() => {
+                  setSyncStates((current) => {
+                    const next = new Map(current);
+                    next.delete(address);
+                    return next;
+                  });
+                })
+                .catch(surfaceBooksError);
+            },
+          },
+        ],
+      );
+    },
+    [storage, refreshBooks, surfaceBooksError],
+  );
+
+  /**
+   * Write one match decision (D21), latched: a double-tap must not log it twice.
+   *
+   * The two steps fail differently and must SAY so: a failed append means the
+   * decision is not on the books and the row stays; a failed refresh after a
+   * successful append means the decision IS recorded and only the screen is stale.
+   * One shared catch would tell the user "could not record" for the second case and
+   * invite a re-tap -- which, with a fresh `at`, would be a second op for one
+   * decision (content addressing cannot collapse it).
+   */
+  const decide = useCallback(
+    (op: Op): void => {
+      if (decisionLatchRef.current) return;
+      decisionLatchRef.current = true;
+      setDeciding(true);
+      setDecisionError(null);
+      void storage
+        .appendOps([op])
+        .then(
+          () =>
+            refreshBooks().catch((error: unknown) => {
+              // Recorded, but the screen could not be rebuilt: same banner the
+              // ledger uses for a failed books read, not a "not recorded" claim.
+              surfaceBooksError(error);
+              setDecisionError(
+                'The decision was recorded, but the screen could not refresh. Pull to refresh on the ledger.',
+              );
+            }),
+          (error: unknown) => {
+            setDecisionError(
+              `Could not record the decision: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          },
+        )
+        .finally(() => {
+          decisionLatchRef.current = false;
+          setDeciding(false);
+        });
+    },
+    [storage, refreshBooks, surfaceBooksError],
+  );
+
+  const onConfirmMatch = useCallback(
+    (pending: PendingMatch): void => decide(matchConfirmedByUserOp(pending.candidate, clock.now())),
+    [decide],
+  );
+
+  const onRejectMatch = useCallback(
+    (pending: PendingMatch): void => {
+      const { invoiceId, signature, instructionIndex } = pending.candidate;
+      decide(matchRejectedOp(invoiceId, signature, instructionIndex, clock.now()));
+    },
+    [decide],
   );
 
   const onCreateInvoice = useCallback(
@@ -420,11 +613,16 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
       <View style={styles.root}>
         <InvoicesScreen
           invoices={books.invoices}
+          pending={books.pending}
+          canCreate={books.watched.length > 0}
           onCreate={() => setScreen('create-invoice')}
           onBack={() => setScreen('ledger')}
           onShare={onShareInvoice}
+          onConfirmMatch={onConfirmMatch}
+          onRejectMatch={onRejectMatch}
+          deciding={deciding}
           sharingInvoiceId={sharingInvoiceId}
-          shareError={shareError}
+          errorBanner={decisionError ?? shareError}
         />
         <StatusBar style="auto" />
       </View>
@@ -468,6 +666,7 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
   return (
     <View style={styles.root}>
       <LedgerScreen
+        network={NETWORK}
         watched={books.watched}
         events={books.events}
         syncStates={syncStates}
@@ -475,6 +674,7 @@ function Main({ storage }: { readonly storage: StoragePort }): React.JSX.Element
         errorBanner={booksError}
         onRefresh={onRefresh}
         onAddAddress={() => setScreen('add')}
+        onUnwatch={onUnwatch}
         onOpenInvoices={() => setScreen('invoices')}
         onOpenIncome={onOpenIncome}
         openInvoiceCount={books.invoices.filter((v) => v.status !== 'paid').length}
@@ -508,5 +708,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.8,
     textAlign: 'center',
+  },
+  errorHint: {
+    fontSize: 13,
+    opacity: 0.7,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  retryButton: {
+    marginTop: 12,
+    backgroundColor: '#1f4e9c',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
 });

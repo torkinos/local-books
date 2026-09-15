@@ -15,6 +15,7 @@ import type {
   Address,
   ChainEvent,
   InvoiceCreatedOp,
+  MatchVia,
   Op,
   Signature,
   UnixSeconds,
@@ -34,7 +35,7 @@ export interface InvoiceView {
 export interface PaymentRef {
   readonly signature: Signature;
   readonly instructionIndex: number;
-  readonly via: 'reference' | 'heuristic-confirmed-by-user';
+  readonly via: MatchVia;
 }
 
 export interface WatchedAddressView {
@@ -85,6 +86,13 @@ export function project(
   const categories = new Map<string, string>();
   /** invoiceId -> eventKey -> PaymentRef. Keyed so reject can remove precisely. */
   const confirmed = new Map<string, Map<string, PaymentRef>>();
+  /**
+   * eventKey -> invoiceId currently holding it. One transfer settles at most ONE
+   * invoice: a later confirm of the same transfer to a different invoice supersedes
+   * the earlier one (later decisions win, as everywhere in this fold), so two
+   * invoices can never both read "paid" on the strength of one payment.
+   */
+  const holder = new Map<string, string>();
   const rejected = new Set<string>();
 
   for (const op of ordered) {
@@ -107,6 +115,10 @@ export function project(
 
       case 'match-confirmed': {
         const key = eventKey(op);
+        const previous = holder.get(key);
+        if (previous !== undefined && previous !== op.invoiceId) {
+          confirmed.get(previous)?.delete(key);
+        }
         const forInvoice = confirmed.get(op.invoiceId) ?? new Map<string, PaymentRef>();
         forInvoice.set(key, {
           signature: op.signature,
@@ -114,15 +126,19 @@ export function project(
           via: op.via,
         });
         confirmed.set(op.invoiceId, forInvoice);
+        holder.set(key, op.invoiceId);
         break;
       }
 
-      case 'match-rejected':
-        confirmed.get(op.invoiceId)?.delete(eventKey(op));
+      case 'match-rejected': {
+        const key = eventKey(op);
+        confirmed.get(op.invoiceId)?.delete(key);
+        if (holder.get(key) === op.invoiceId) holder.delete(key);
         // Additive on purpose: "was ever rejected" survives later ops, so automation
         // can never re-propose the pair. A later HUMAN confirm still lands above.
         rejected.add(matchPairKey(op.invoiceId, op));
         break;
+      }
 
       case 'category-assigned':
         categories.set(eventKey(op), op.category);

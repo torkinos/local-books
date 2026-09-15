@@ -49,8 +49,9 @@ export function mainnetEndpoints(userRpcUrl?: string): readonly JsonRpcAdapter[]
   return userRpcUrl ? [new JsonRpcAdapter(userRpcUrl, 'user-rpc'), ...defaults] : defaults;
 }
 
-export function devnetEndpoints(): readonly JsonRpcAdapter[] {
-  return [new JsonRpcAdapter('https://api.devnet.solana.com', 'devnet')];
+export function devnetEndpoints(userRpcUrl?: string): readonly JsonRpcAdapter[] {
+  const defaults = [new JsonRpcAdapter('https://api.devnet.solana.com', 'devnet')];
+  return userRpcUrl ? [new JsonRpcAdapter(userRpcUrl, 'user-rpc'), ...defaults] : defaults;
 }
 
 interface JsonRpcError {

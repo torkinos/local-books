@@ -16,9 +16,13 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cut
 
 ## W1 · Thu Aug 13 – Sun Aug 23 — scaffold + spikes
 
-### `[x]` T1 · Repo, license, README `[M2]`
+### `[~]` T1 · Repo, license, README `[M2]`
 > **2026-08-23:** repo public (verified logged-out, HTTP 200), four root docs present,
 > README added — states watch-only, no backend, and has a build section.
+> **2026-09-14:** reopened. Repo is PRIVATE for now (D22; logged-out fetch returns
+> 404) and flips back to public with the Release. A `LICENSE` file was never added —
+> README and package.json say MIT, GitHub shows "no license". Both close under T34's
+> checklist below.
 Initialise the repo, MIT license, README with a one-paragraph description and a build
 section. Push to GitHub **public**.
 **Accept:** repo reachable at a public URL by someone logged out; README states what the
@@ -46,6 +50,12 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > **2026-08-23:** `.github/workflows/ci.yml` written (typecheck, lint, purity-guard
 > self-check, tests) and badge in README. Remaining: push and watch the first remote
 > run go green, then enable branch protection so red blocks.
+> **2026-09-14:** it had never run (triggers were master + PRs; all work is on
+> develop, 12 commits ahead) and would have been red: it pinned Node 20 while five
+> mobile test files need `node:sqlite` (Node 22.13+; `.nvmrc` says 24). Fixed:
+> `node-version-file: .nvmrc`, develop added to the push triggers, `engines.node`
+> and the README now say 24. Remaining: push develop, watch it go green, merge to
+> master, enable branch protection.
 
 ### `[x]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
@@ -96,6 +106,12 @@ explicit **go/no-go** and, if no-go, a named fallback (user-supplied RPC URL, or
 history depth).
 
 ### `[ ]` S2 · **Spike: reference-key detection** (weekend, ~3 h)
+> **2026-09-14:** runbook + tooling ready: `spikes/02-reference-detection.md` is the
+> step-by-step (Phantom on devnet, faucets, five payment cases, what to record), and
+> `spikes/02-reference-detection/` has `dump-fixture.mjs` (signature → fixture JSON)
+> and `check-fixture.mjs` (runs the REAL normalizer + matcher over a fixture and
+> says whether owner paging, token-account paging, and tier a would each have seen
+> it). Needs the phone and a devnet wallet — cannot run in the sandbox.
 Devnet: transfer request → payment → `findReference`. Then a **direct transfer that
 ignores the QR**.
 **Accept:** `spikes/02-reference-detection.md` confirms tier-a detection end to end, and
@@ -183,6 +199,14 @@ Match incoming successful transfers carrying an invoice's reference.
 no reference (the tier-b gap, asserted as a passing test); ignores failed transactions;
 ignores outgoing; keeps two transfers in one transaction distinct; still matches when the
 client underpays, flagging the shortfall separately.
+> **2026-09-14:** the "flagging the shortfall" half now reaches a human (D21):
+> `pendingMatches` (the complement of `autoMatchOps` minus rejected pairs) feeds a
+> "Needs your decision" list on the invoices screen — shortfall/overage/wrong token
+> named, Mark paid (`via: reference-confirmed-by-user`) or Not this invoice
+> (`match-rejected`). Review round then split the reasons so the copy is truthful for
+> every gate shape (which invoice / which transfer / other claim rejected) and made
+> the projection enforce one-transfer-one-invoice. Tests: `test/pending.test.ts` and
+> core `test/projection-one-invoice.test.ts`. Eyeball on device in T30.
 
 ### `[~]` T15 · Minimal UI: add address + ledger list
 Two screens. Paste an address, label it, watch backfill progress; a ledger list of
@@ -207,6 +231,14 @@ survives backgrounding the app.
 Add address → pay with a Solana Pay transfer request → detected → matched → visible.
 **Accept:** runs on a physical device, start to finish, **recorded as a screen capture**
 (raw footage for the W6 demo video — capture it while it is fresh).
+> **2026-09-14:** a code gap that would have broken this on the SECOND payment is
+> fixed before the device pass (D19): owner-only paging never sees a USDC transfer
+> into an existing token account, so each wallet's stablecoin ATAs are now derived
+> locally and paged too (`sync/ata.ts`, `sync/wallet.ts`; derivation pinned to two
+> real mainnet ATAs). The build must be devnet for this task: put
+> `EXPO_PUBLIC_NETWORK=devnet` in `apps/mobile/.env.development` (D18; never in
+> `.env`, which release builds also read). S2's runbook
+> (`spikes/02-reference-detection.md`) is the script for this capture.
 
 ### `[ ]` T17 · EAS build → GitHub Release APK `[M2]`
 Configure EAS, produce a signed APK, publish as a GitHub Release.
@@ -342,22 +374,45 @@ Monthly totals per client from the projection.
 
 ## W5 · Mon Sep 14 – Sun Sep 20 — cut line, then freeze
 
-### `[ ]` T27 · Apply the cut line (Mon–Wed)
+### `[~]` T27 · Apply the cut line (Mon–Wed)
 Cut from the bottom of PROJECT.md line 117 — CSV export first, then valuation.
 **Accept:** anything cut is recorded in DECISIONS.md with a reason and moved to a
 post-grant list. Nothing is left half-built in the tree.
+> **2026-09-14 (Mon):** nothing on the In list is cut — every code half is built and
+> tested. What a 53-agent audit found half-built or promised-but-absent was decided
+> and recorded instead: network/RPC URL are build-time flags, settings screen
+> deferred (D18); token-account paging built (D19); background sync deferred and
+> the framing reworded everywhere (D20); confirm/reject built (D21); repo private
+> until release (D22). Still half-built and NOT yet decided: the `category-assigned`
+> op is folded and exported but nothing produces it (categorization UI is on the
+> deferred list now), and core's unused `CorePorts` interface. Both are removals or
+> one-line notes for T34.
 
 > **Wed Sep 16 — FEATURE FREEZE.** Nothing new after this, including "small" things.
 
-### `[ ]` T28 · Empty states + error copy
+### `[~]` T28 · Empty states + error copy
 Every screen has a first-run state; RPC failures say what to do next.
 **Accept:** a fresh install with no addresses is comprehensible without a tutorial.
+> **2026-09-14:** code half done. Every screen already had a first-run state; added
+> this pass: the boot-failure screen offers Try again (generic) or names the exact
+> Android path to clear data (lost key, D12) instead of dead-ending; + New is
+> disabled with no watched address and the empty state says why; Android hardware
+> back returns to the parent screen instead of backgrounding the app
+> (`ui/navigation.ts`); an address can be removed from the ledger (confirmed, then
+> `address-unwatched`; in-flight sync cancelled). **Remaining on device:** the
+> fresh-install walk-through itself.
 
-### `[ ]` T29 · Backfill progress + honest sync framing
-Per PROJECT.md line 62: "checks when you open, and periodically in the background on
-Android." **Never** promise real-time.
+### `[~]` T29 · Backfill progress + honest sync framing
+Per PROJECT.md line 62: "checks when you open the app, and while it is open."
+**Never** promise real-time.
 **Accept:** the copy makes no real-time claim anywhere; progress is visible during a long
 backfill.
+> **2026-09-14:** the line-62 framing changed to what the app actually does (D20:
+> no background job in v0.1); README, PROJECT.md, App docstring and this task now
+> agree. The one real-time-sounding string ("matches itself when it lands") reads
+> "the next time the app checks". Progress copy covers the new token-account pass
+> ("Backfilling token-account history — …", D19). **Remaining on device:** watch a
+> long backfill once and confirm the counts read sensibly.
 
 ### `[ ]` T30 · Device pass on a clean install
 **Accept:** install the Release APK on a device that has never run a dev build; complete
@@ -387,6 +442,11 @@ README, architecture note, `DECISIONS.md` current, build instructions that work 
 clean clone.
 **Accept:** someone else follows the README on a fresh machine and gets a running dev
 build without asking a question.
+> **Checklist (from the 2026-09-14 audit):** add the MIT `LICENSE` file (T1); flip the
+> repo back to public and re-verify logged-out (T1/D22); README gets the Android
+> toolchain + `prebuild`/`run:android` steps; fix the T12 note (its app-side D4
+> test already exists in `sqliteStorage.test.ts`); remove core's unused `CorePorts`
+> interface; decide the `category-assigned` op (nothing produces it — remove or note).
 
 ### `[ ]` T35 · Final build-in-public thread
 **Accept:** posted, links the Release and the landing page.

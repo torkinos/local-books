@@ -92,6 +92,28 @@ export function matchRejectedOp(
   return withOpId({ type: 'match-rejected', invoiceId, signature, instructionIndex, at });
 }
 
+/**
+ * A human booking a reference candidate automation refused (D21): a shortfall or
+ * overpayment, an ambiguous transaction, a second payment claiming the invoice. The
+ * reference was on chain, so the pairing is still a lookup -- but the DECISION to
+ * settle the invoice with it was a person's, and `via` says so for the audit trail.
+ * Tier b has no implementation in v0.1 (PROJECT.md line 123), so a heuristic
+ * candidate cannot reach here; the guard keeps that true if one ever does.
+ */
+export function matchConfirmedByUserOp(candidate: MatchCandidate, at: UnixSeconds): MatchConfirmedOp {
+  if (candidate.tier !== 'reference') {
+    throw new Error('Only reference candidates exist in v0.1; a heuristic candidate cannot be confirmed here.');
+  }
+  return withOpId({
+    type: 'match-confirmed',
+    invoiceId: candidate.invoiceId,
+    signature: candidate.signature,
+    instructionIndex: candidate.instructionIndex,
+    via: 'reference-confirmed-by-user',
+    at,
+  });
+}
+
 /** Auto-apply is only legal for tier-a candidates the matcher marked unambiguous. */
 export function matchConfirmedOp(candidate: MatchCandidate, at: UnixSeconds): MatchConfirmedOp {
   if (candidate.tier !== 'reference' || !candidate.autoApplicable) {

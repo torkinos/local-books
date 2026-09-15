@@ -29,8 +29,8 @@
  * (failover-needed from the driver, maxConsecutiveRateLimits during hydration, or a
  * transport error), the engine restarts the generator on the next endpoint; the
  * checkpoint in storage makes that restart seamless. When the list runs out the run
- * ends 'endpoints-exhausted' -- the caller retries on the next app-open/poll, and the
- * error copy's first remedy is a user-supplied RPC URL (PROJECT.md line 72).
+ * ends 'endpoints-exhausted' -- the caller retries on the next app-open/poll. A
+ * user-supplied RPC URL (PROJECT.md line 72) is a build-time flag in v0.1 (D18).
  *
  * Failed transactions (err != null) are hydrated like any other: they are chain facts,
  * the normalizer marks their events succeeded:false, and matching/projection already
@@ -74,7 +74,10 @@ export interface SyncTotals {
 export type SyncPhase = 'paging' | 'hydrating' | 'backoff';
 
 export interface SyncProgress extends Readonly<SyncTotals> {
+  /** The address being PAGED: the wallet, or one of its token accounts (D19). */
   readonly address: Address;
+  /** The wallet the events are booked under. Equals `address` for the wallet itself. */
+  readonly owner: Address;
   readonly endpointLabel: string;
   /** 'backfill' walks history; 'incremental' checks for new payments since. */
   readonly mode: 'backfill' | 'incremental';
@@ -117,6 +120,15 @@ export interface SyncEngineOptions {
    * page, which at publicnode's measured ~5 tx/s would be a ~3-minute blind spot.
    */
   readonly hydrationChunkSize?: number;
+  /**
+   * The wallet these events belong to, when `address` is one of its token accounts
+   * (D19: ATAs are paged separately because a transfer into an existing token
+   * account never names the owner). Events are normalized and stored under the
+   * OWNER -- direction and internal-move detection resolve via token-balance
+   * owners -- while the checkpoint stays keyed by the paged address, so each
+   * account walks its own history. Defaults to `address`.
+   */
+  readonly owner?: Address;
 }
 
 const DEFAULT_HYDRATION_CHUNK = 25;
@@ -158,6 +170,36 @@ function isTransportError(error: unknown): boolean {
   return false;
 }
 
+/** The checkpoint row key for `address` walked on behalf of `owner` (D19). */
+export function checkpointKeyFor(address: Address, owner: Address): Address {
+  return owner === address ? address : (`${address}@${owner}` as Address);
+}
+
+/**
+ * StoragePort view whose checkpoint reads/writes for `address` land under the
+ * (address, owner) key. Everything else passes through untouched. Core's driver
+ * never inspects the checkpoint's own `address` field beyond carrying it, so the
+ * rewrite is invisible to it; the field is restored on read so the checkpoint the
+ * driver yields still names the account it walked.
+ */
+function namespaceCheckpoints(storage: StoragePort, address: Address, owner: Address): StoragePort {
+  const key = checkpointKeyFor(address, owner);
+  return {
+    appendOps: (ops) => storage.appendOps(ops),
+    readOps: () => storage.readOps(),
+    putChainEvents: (events) => storage.putChainEvents(events),
+    getChainEvents: (a) => storage.getChainEvents(a),
+    clearProjection: () => storage.clearProjection(),
+    async getCheckpoint(a) {
+      if (a !== address) return storage.getCheckpoint(a);
+      const checkpoint = await storage.getCheckpoint(key);
+      return checkpoint === null ? null : { ...checkpoint, address };
+    },
+    putCheckpoint: (checkpoint) =>
+      storage.putCheckpoint(checkpoint.address === address ? { ...checkpoint, address: key } : checkpoint),
+  };
+}
+
 /**
  * Run one sync pass for one address: continue the initial backfill if history is not
  * fully walked yet, otherwise check for new signatures since the stored watermark.
@@ -174,7 +216,13 @@ export async function syncAddress(
   const opts = options.backfill ?? DEFAULT_BACKFILL_OPTIONS;
   const chunkSize = options.hydrationChunkSize ?? DEFAULT_HYDRATION_CHUNK;
   const sleep = deps.sleep ?? defaultSleep;
-  const { storage, clock, signal } = deps;
+  const owner = options.owner ?? address;
+  const { clock, signal } = deps;
+  // A token account's checkpoint is namespaced by its owner (D19): the same account
+  // paged as its own watched address and as part of its wallet are two different
+  // walks with two different event stores, and sharing one cursor row would let
+  // the first walk's "complete" silently skip the second's whole history.
+  const storage = owner === address ? deps.storage : namespaceCheckpoints(deps.storage, address, owner);
 
   const totals: SyncTotals = { pages: 0, signaturesSeen: 0, transactionsFetched: 0, eventsStored: 0 };
   let lastError: unknown;
@@ -202,6 +250,7 @@ export async function syncAddress(
     ): void => {
       deps.onProgress?.({
         address,
+        owner,
         endpointLabel: rpc.endpointLabel,
         mode,
         phase,
@@ -221,7 +270,10 @@ export async function syncAddress(
       // A replayed page (crash, rotation, budget-resume) re-buys nothing: whatever
       // already produced stored events is skipped. Transactions that normalized to
       // zero events are re-fetched on replay -- the cheap, correct direction.
-      const known = await storage.getChainEvents(address);
+      // Keyed by OWNER: that is where this account's events are stored, and a
+      // transaction already ingested through the wallet's own paging (an ATA-create
+      // names both) must not be bought twice.
+      const known = await storage.getChainEvents(owner);
       let missing = missingSignatures(signatures, known);
       const pageTotal = missing.length;
       let fetchedThisPage = 0;
@@ -270,7 +322,7 @@ export async function syncAddress(
 
         // Persist THIS chunk before anything else -- partial progress survives a
         // kill or a rotation, and is what makes the retry-the-shortfall loop cheap.
-        const events = normalizeTransactions(fetched, address);
+        const events = normalizeTransactions(fetched, owner);
         await storage.putChainEvents(events);
         totals.transactionsFetched += fetched.length;
         totals.eventsStored += events.length;

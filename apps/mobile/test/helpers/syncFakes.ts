@@ -82,6 +82,81 @@ export function rawSolTransfer(
   };
 }
 
+export const USDC_MINT = asAddress('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+/**
+ * A jsonParsed SPL `transferChecked` INTO an existing token account. Faithful to the
+ * wire shape that motivates D19: the account list names the payer, the two token
+ * accounts, the mint, and the token program -- and NOT the recipient wallet, which
+ * appears only as the destination balance's `owner`. Paging the owner never returns
+ * this transaction; paging the token account does.
+ */
+export function rawSplTransferChecked(
+  signature: Signature,
+  opts: {
+    slot?: number;
+    payer?: Address;
+    payerTokenAccount?: Address;
+    destinationTokenAccount: Address;
+    destinationOwner: Address;
+    mint?: Address;
+    amount?: string;
+    references?: readonly Address[];
+  },
+): RawTransaction {
+  const payer = opts.payer ?? PAYER;
+  const payerTokenAccount = opts.payerTokenAccount ?? asAddress('PayerTokenAcct11111111111111111111111111111');
+  const mint = opts.mint ?? USDC_MINT;
+  const amount = opts.amount ?? '1000000';
+  const references = opts.references ?? [];
+  return {
+    signature,
+    slot: opts.slot ?? 1,
+    blockTime: asUnixSeconds(1_700_000_000),
+    raw: {
+      transaction: {
+        message: {
+          accountKeys: [
+            { pubkey: payer, signer: true, writable: true },
+            { pubkey: payerTokenAccount, signer: false, writable: true },
+            { pubkey: opts.destinationTokenAccount, signer: false, writable: true },
+            { pubkey: mint, signer: false, writable: false },
+            ...references.map((pubkey) => ({ pubkey, signer: false, writable: false })),
+            { pubkey: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', signer: false, writable: false },
+          ],
+          instructions: [
+            {
+              program: 'spl-token',
+              programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+              parsed: {
+                type: 'transferChecked',
+                info: {
+                  source: payerTokenAccount,
+                  destination: opts.destinationTokenAccount,
+                  authority: payer,
+                  mint,
+                  tokenAmount: { amount, decimals: 6 },
+                },
+              },
+            },
+          ],
+        },
+      },
+      meta: {
+        err: null,
+        preTokenBalances: [
+          { accountIndex: 1, mint, owner: payer, uiTokenAmount: { amount: '5000000', decimals: 6 } },
+          { accountIndex: 2, mint, owner: opts.destinationOwner, uiTokenAmount: { amount: '0', decimals: 6 } },
+        ],
+        postTokenBalances: [
+          { accountIndex: 1, mint, owner: payer, uiTokenAmount: { amount: '4000000', decimals: 6 } },
+          { accountIndex: 2, mint, owner: opts.destinationOwner, uiTokenAmount: { amount, decimals: 6 } },
+        ],
+      },
+    },
+  };
+}
+
 export interface TxBehavior {
   /** Throw with ZERO progress (the adapter's contract for a first-call failure). */
   readonly throw?: Error;

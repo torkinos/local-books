@@ -9,6 +9,7 @@ import { getRandomValues } from 'expo-crypto';
 import type { ClockPort, DocPort, RatePort, RpcPort } from '@local-books/core';
 import { asUnixSeconds } from '@local-books/core';
 import { makeDocPort } from './adapters/docs.js';
+import { CONFIG_WARNINGS, NETWORK, USER_RPC_URL } from './config.js';
 import { makeNbgRatePort } from './adapters/rates.js';
 import { makeReferenceKeyPort } from './adapters/referenceKeys.js';
 import { mainnetEndpoints, devnetEndpoints } from './adapters/rpc.js';
@@ -49,15 +50,20 @@ export function openRatePort(): Promise<RatePort> {
 }
 
 /**
- * Which chain the app watches. 'devnet' through W2: the demo path (T15/T16) runs
- * against devnet payments end to end. Flips to 'mainnet' when the settings screen
- * lands (post-W2), where the user-supplied RPC URL (PROJECT.md line 72) also plugs
- * into mainnetEndpoints' failover list.
+ * Which chain the app watches, and the optional personal RPC endpoint, are
+ * BUILD-TIME switches (D18) parsed in config.ts: `EXPO_PUBLIC_NETWORK=devnet` in
+ * apps/mobile/.env.development for the demo path, nothing -- mainnet -- for the
+ * Release APK; `EXPO_PUBLIC_RPC_URL` goes first in the failover list. The ledger
+ * header shows a 'devnet' tag so footage and testers can tell which build they
+ * hold. A settings screen is post-freeze work; until then the escape hatch is a
+ * rebuild, not a paste.
  */
-export const NETWORK: 'devnet' | 'mainnet' = 'devnet';
+export { NETWORK } from './config.js';
 
-export function rpcEndpoints(userRpcUrl?: string): readonly RpcPort[] {
-  return NETWORK === 'mainnet' ? mainnetEndpoints(userRpcUrl) : devnetEndpoints();
+for (const warning of CONFIG_WARNINGS) console.warn(`[local-books config] ${warning}`);
+
+export function rpcEndpoints(userRpcUrl: string | undefined = USER_RPC_URL): readonly RpcPort[] {
+  return NETWORK === 'mainnet' ? mainnetEndpoints(userRpcUrl) : devnetEndpoints(userRpcUrl);
 }
 
 export { mainnetEndpoints, devnetEndpoints };
