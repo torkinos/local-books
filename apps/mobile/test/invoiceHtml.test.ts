@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { InvoiceCreatedOp, RenderableDoc, TokenAmount } from '@local-books/core';
 import { asAddress, asReferenceKey, asUnixSeconds, invoiceDoc } from '@local-books/core';
 import { invoiceHtml } from '../src/doc/invoiceHtml.js';
-import { invoicePdfHtml } from '../src/adapters/docs.js';
+import { invoicePdfHtml } from '../src/doc/invoicePdfHtml.js';
 import { formatDueDate } from '../src/ui/format.js';
 
 const PAY_TO = asAddress('mvines9iiHiQTysrwkJjGf2gb9Ex9jXJX1ncyp98M9W');

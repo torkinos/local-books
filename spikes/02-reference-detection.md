@@ -1,192 +1,84 @@
 # S2 — Spike: reference-key detection (runbook)
 
-**Status:** NOT RUN — needs the phone and a devnet wallet. Fill in the tables below
-as you go; the go/no-go at the bottom is the deliverable.
+**Status:** RUN 2026-09-15 · **Verdict: GO.** See "Result" below; the four
+transactions are pinned in `packages/core/test/s2-devnet.test.ts`.
 
-**Question:** does tier-a matching (Solana Pay reference on the transfer) detect
-payments reliably end to end, and how big is the gap it structurally cannot see (a
-direct transfer that ignores the QR)? Since 2026-09-14 there is a second question:
-does the token-account paging fix (D19) actually catch the **second** USDC payment,
-which owner-only paging never could.
+**Question:** does a Solana Pay QR payment get detected and matched end to end, does
+the **second** USDC payment still get detected (the token-account fix, D19), and
+does a plain transfer without the QR stay unmatched (the tier-b gap we only size,
+never build)? Three payments answer it. Everything else (wrong amounts, duplicates,
+late arrivals) is pinned by unit tests already and is optional here.
 
-Tier b is **not** built here (PROJECT.md line 123). This spike only sizes the gap
-and produces fixtures.
+## Setup (once)
 
----
+Two Solflare accounts on **Devnet** (Settings › General › Network › Devnet):
+**PAYER** with devnet SOL and USDC, **WATCHED** with nothing.
 
-## 0. Before you start (~20 min, once)
+- SOL for PAYER: <https://faucet.solana.com> (GitHub sign-in, 0.5 SOL is plenty), or
+  `solana airdrop 0.5 <PAYER> -u devnet`. Ground truth is the explorer
+  (`explorer.solana.com/address/<PAYER>?cluster=devnet`), not the wallet's balance
+  screen. Phantom's Testnet Mode is known to spin forever on devnet; use Solflare.
+- USDC for PAYER: <https://faucet.circle.com> › Solana Devnet › paste PAYER. Mint must
+  be `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`.
+- App: `apps/mobile/.env.development` with `EXPO_PUBLIC_NETWORK=devnet`, then
+  `npm run android` from `apps/mobile`. The ledger shows a DEVNET strip under the
+  header; no strip means Metro started before the env file existed.
+- Start the phone's screen recorder before the first tap. This footage is T16.
 
-You need two wallets on **devnet**, both in Phantom is fine (two accounts):
+## The run (~20 min)
 
-- **WATCHED** — the freelancer. The app watches this address. Needs nothing in it.
-- **PAYER** — the client. Needs devnet SOL (fees) and devnet USDC.
+Scan QR codes with the scanner on Solflare's **main screen**, not the one inside
+Send — the Send scanner only accepts bare addresses and calls a pay link "invalid".
 
-1. Phantom → Settings → Developer Settings → **Testnet Mode ON**, then check the
-   Solana network picker under it reads **Devnet** (not Testnet — a wallet on
-   Testnet never sees the faucet USDC below, and its sends land where the devnet
-   build never looks).
-2. Devnet SOL for PAYER: <https://faucet.solana.com> (or `solana airdrop 1 <PAYER> -u devnet`).
-3. Devnet USDC for PAYER: <https://faucet.circle.com> → Solana Devnet → paste PAYER.
-   The mint must be `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` (Circle's devnet
-   USDC — the one `tokens.ts` and `STABLE_MINTS` know). Phantom labels it USDC.
-4. Build the app for devnet: create `apps/mobile/.env.development` containing the
-   single line `EXPO_PUBLIC_NETWORK=devnet` (see `.env.example` for why that file
-   and not `.env`), then from `apps/mobile` run `npm run prebuild` (native deps
-   changed on 09-01) and `npm run android`. The ledger header must show a
-   **DEVNET** tag — if it does not, the env did not reach the bundle.
-5. Compile core for the check script (once, from repo root):
-   ```sh
-   npx tsc -p packages/core --outDir spikes/02-reference-detection/.build --noEmit false --declaration false --sourceMap false
-   echo '{"type":"module"}' > spikes/02-reference-detection/.build/package.json   # silences Node's module-type warning
-   ```
-6. Start the phone's screen recorder before step 1 of the run — this footage IS
-   T16's deliverable. Don't re-shoot later.
+**A — QR payment.** App: **+ Watch** › WATCHED. **Invoices › + New** › client
+"Acme", one line `1 × 1.5`, token USDC (devnet), **+7d**, pay-to WATCHED, **Create
+invoice**. **Share PDF**, scan it from PAYER, send. Pull to refresh in the app.
 
-## 1. The run (~60–90 min)
+Expect: a `+1.5 USDC` ledger row and the invoice **paid · matched by reference**.
 
-Every case: note the **signature** (Phantom → activity → View on explorer, or copy
-from the app's ledger row later). After the run, dump each one:
+**B — second QR payment.** New invoice for `2 USDC`, same steps. WATCHED's USDC
+account now exists, so this transaction never names WATCHED itself; owner-only
+paging would have missed it.
 
-```sh
-node spikes/02-reference-detection/dump-fixture.mjs --sig <SIG> \
-  --out packages/core/test/fixtures/s2/<case>.json
-node spikes/02-reference-detection/check-fixture.mjs packages/core/test/fixtures/s2/<case>.json \
-  --owner <WATCHED> --reference <INVOICE_REFERENCE> [--expect-amount <raw units>]
-```
+Expect: same as A. If it does not appear, that is the D19 code path failing.
 
-The invoice reference is printed on the shared PDF: the `Payment reference:` line
-(also the `reference=` parameter of the printed pay URL and the `Invoice …` header).
-The app itself does not display it. `--expect-amount` is the invoice total in raw
-units (1.5 USDC = `1500000`).
+**C — direct transfer, no QR.** New invoice for `3 USDC`, but do NOT scan. In
+Solflare: Send › 3 USDC › WATCHED.
 
-### Case A — exact payment via QR (the happy path; also T16)
+Expect: a `+3 USDC` ledger row, the invoice stays **open**, and nothing under
+"Needs your decision". That is the tier-b gap, sized: 1 of 3 payments in this run.
 
-1. App: **+ Watch** → paste WATCHED, label it. Wait for "No transactions found yet".
-2. App: **Invoices → + New** → client "Acme", one line `1 × 1.5` USDC, pay-to WATCHED.
-3. **Share PDF** → send it anywhere you can open it on the PAYER phone/screen (or
-   just show the PDF on this phone and scan it with Phantom's scanner on the other).
-4. Phantom (PAYER): scan → it should prefill **1.5 USDC to WATCHED**. Send.
-5. App: pull to refresh. Expect within one refresh: a `+1.5 USDC` ledger row, and
-   the invoice **paid · matched by reference**.
+## Result
 
-| | expected | got |
-|---|---|---|
-| Phantom parsed the QR (mint, amount, recipient) | yes | |
-| Ledger row appears after refresh | yes | |
-| Invoice status | paid · by reference | |
-| `check-fixture`: visible via owner paging | yes (first payment creates the ATA) | |
-| `check-fixture`: tier a | DETECTED, auto-match | |
-| signature | | |
+| case | matched? | signature (devnet) | notes |
+|---|---|---|---|
+| A (1 USDC, first payment) | yes, by reference | `2hxU3WUd…S4kaP` (10:50 UTC) | ATA-create + transfer; the only tx that names WATCHED |
+| A again (1 USDC) | yes, by reference | `2VhXYszg…aipx4` (12:55 UTC) | names only the token account |
+| B (2 USDC) | yes, by reference | `N3VcTqQa…JRWZ` (12:57 UTC) | names only the token account — the D19 case |
+| C (3 USDC, direct) | stayed open | `mXKWyLB8…mjin` (12:59 UTC) | no reference; deposit shown, nothing to decide |
 
-### Case B — second payment via QR (**the D19 check**)
+WATCHED `EFhBHyks…MRjEy`, PAYER `CuxRzb13…dkmY`, Solflare on Devnet, Circle devnet
+USDC. Solflare paid into the associated token account every time (derivation, not
+enumeration, was the right D19 call), and 3 of the 4 payments were invisible to
+owner-only paging — the pre-D19 app would have shown one payment and missed the
+rest. Income screen and CSV export exercised in the same session; app killed and
+reopened with the rows intact (T6/T15 device halves).
 
-Same as A with a new invoice (say `2 USDC`). Now the ATA exists, so the transaction
-will NOT name WATCHED.
+**GO** = A and B matched without a manual step and C stayed open.
+**NO-GO** = B not detected → note whether Solflare paid into a non-associated
+token account (explorer › the transaction › token balances); that decides whether
+D19 needs `getTokenAccountsByOwner` on a user RPC URL instead of derivation.
 
-| | expected | got |
-|---|---|---|
-| Ledger row + invoice paid after refresh | yes | |
-| `check-fixture`: visible via owner paging | **NO** | |
-| `check-fixture`: visible via token-account paging | yes (`<- the D19 case`) | |
-| `check-fixture`: tier a | DETECTED, auto-match | |
-| signature | | |
+Verdict: **GO** · Date: 2026-09-15 · Device: Android (user's phone) · Wallet: Solflare (Devnet)
 
-If this case fails in the app but `check-fixture` says "visible via token-account
-paging: yes", the bug is in the sync engine, not the derivation. If it says "NO"
-for both, Phantom paid into a non-associated token account — record it; that
-would mean D19's derivation approach needs enumeration after all.
+## Optional, if you have time
 
-### Case C — direct transfer, no QR (the tier-b gap, PROJECT.md line 81)
-
-Create an invoice (`3 USDC`). Do NOT scan. In Phantom: Send → 3 USDC → WATCHED.
-
-| | expected | got |
-|---|---|---|
-| Ledger row appears | yes (`+3 USDC`) | |
-| Invoice status | **open** — structurally invisible to tier a | |
-| "Needs your decision" list | empty (no reference to hang a decision on) | |
-| `check-fixture`: tier a | NOT DETECTED | |
-| signature | | |
-
-This is the case tier b would have to handle. Do not build it. Just record it.
-
-### Case D — wrong amount via QR
-
-Create an invoice (`4 USDC`). Scan with Phantom; before sending, try to **edit the
-amount** to 3.5. If Phantom lets you: send.
-
-| | expected | got |
-|---|---|---|
-| Phantom lets the amount be edited | (record either way) | |
-| Ledger row | `+3.5 USDC` | |
-| Invoice status | **open** | |
-| "Needs your decision" | one row: "Paid 3.5 USDC of 4 USDC — short by 0.5 USDC." | |
-| Tap **Mark paid** → invoice | paid · **matched by you** | |
-| `check-fixture --expect-amount 4000000` | DETECTED, amount=under → needs your decision | |
-| signature | | |
-
-If Phantom does not let you edit a fixed-amount request, that is a finding in
-itself (record it) and this case cannot be produced from Phantom; skip it.
-
-### Case E — duplicate amounts in one window
-
-Create two invoices of `1 USDC` each (X and Y). Pay **X via its QR**. Pay **Y by
-direct transfer** (no QR), same amount, minutes apart.
-
-| | expected | got |
-|---|---|---|
-| X | paid · by reference | |
-| Y | open; its 1 USDC shows as an unexplained ledger row | |
-| "Needs your decision" | empty | |
-
-Then pay **X's QR a second time** (Phantom will happily re-scan the same PDF):
-
-| | expected | got |
-|---|---|---|
-| X stays paid; the second payment is a plain ledger row | yes | |
-| (variant) if X were still open: both payments listed under "Needs your decision" as "another payment also references this invoice" | | |
-
-### Case F — late arrival
-
-Create an invoice (`0.5 USDC`), **close the app fully** (swipe it away), pay via QR,
-wait a few minutes, reopen.
-
-| | expected | got |
-|---|---|---|
-| Sync line on open | "Checking for new payments…" then the row | |
-| Invoice | paid · by reference | |
-| Nothing ever claims real-time | true | |
-
-## 2. Fixtures
-
-Commit every dumped JSON under `packages/core/test/fixtures/s2/` (public devnet
-data). Then, in a follow-up, pin them: a normalizer test per fixture (events under
-WATCHED) and a matcher test for A/B/D — the same assertions `check-fixture`
-printed, made permanent.
-
-| fixture | case | owner-paging | ATA-paging | tier a |
-|---|---|---|---|---|
-| `exact-payment.json` | A | | | |
-| `second-payment.json` | B | | | |
-| `direct-transfer.json` | C | | | |
-| `wrong-amount.json` | D | | | |
-| `duplicate-qr.json` / `duplicate-direct.json` | E | | | |
-| `late-arrival.json` | F | | | |
-
-## 3. Go / no-go
-
-**GO** means: A, B and F detected and auto-matched with no manual step; D shows up
-under "Needs your decision" with the right shortfall; C and E's direct transfer
-stay unmatched (expected — that is the tier-b gap, sized here as "1 of N payments
-in this run", which is the number to carry into the post-grant tier-b design).
-
-**NO-GO** triggers and their named fallbacks:
-
-- B invisible to both paging paths → Phantom used a non-associated token account:
-  add `getTokenAccountsByOwner` enumeration on a user RPC URL (publicnode gates it).
-- A detected only via owner paging AND B not detected at all → engine bug in
-  `sync/wallet.ts`; the fixture reproduces it in `test/wallet.test.ts`.
-- Phantom does not parse the QR at all → S3's problem, not S2's; note the exact
-  failure (no prefill? wrong mint?) and continue with the URL typed by hand.
-
-Verdict: ______ · Date: ______ · Device: ______ · Phantom version: ______
+- Wrong amount via QR (edit the amount in Solflare before sending, if it lets you):
+  expect the invoice to appear under **Needs your decision** with the shortfall
+  named; **Mark paid** flips it to paid · matched by you.
+- Fixtures for core's tests: copy each signature from the explorer, then
+  `node spikes/02-reference-detection/dump-fixture.mjs --sig <SIG> --out packages/core/test/fixtures/s2/<case>.json`
+  and `node spikes/02-reference-detection/check-fixture.mjs <file> --owner <WATCHED> --reference <ref>`
+  (the reference is printed on the PDF under the QR). `check-fixture` needs core
+  compiled once:
+  `npx tsc -p packages/core --outDir spikes/02-reference-detection/.build --noEmit false --declaration false --sourceMap false && echo '{"type":"module"}' > spikes/02-reference-detection/.build/package.json`

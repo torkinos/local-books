@@ -12,6 +12,7 @@
     ],
     "android": {
       "package": "com.localbooks.app",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true
     },
     "ios": {
@@ -19,7 +20,8 @@
       "supportsTablet": false
     },
     "plugins": [
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withReleaseSigning.js"
     ]
   }
 }

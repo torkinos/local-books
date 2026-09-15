@@ -55,14 +55,9 @@ export function LedgerScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Local Books</Text>
-          {network !== 'mainnet' && (
-            <View style={styles.networkTag} testID="network-tag">
-              <Text style={styles.networkTagText}>{network}</Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.title} numberOfLines={1}>
+          Local Books
+        </Text>
         <View style={styles.headerButtons}>
           <Pressable style={styles.invoicesButton} onPress={onOpenIncome} testID="income-button">
             <Text style={styles.invoicesButtonText}>Income</Text>
@@ -77,6 +72,17 @@ export function LedgerScreen({
           </Pressable>
         </View>
       </View>
+
+      {network !== 'mainnet' && (
+        // A full-width strip, not a header tag: the header row is already three
+        // buttons wide on a phone and a tag next to the title pushed + Watch off
+        // screen (2026-09-15 device pass).
+        <View style={styles.networkBanner} testID="network-tag">
+          <Text style={styles.networkBannerText}>
+            {network.toUpperCase()} BUILD — test network, test tokens
+          </Text>
+        </View>
+      )}
 
       {errorBanner !== null && (
         <View style={styles.errorBanner} testID="books-error">
@@ -181,32 +187,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   title: {
     fontSize: 22,
     fontWeight: '700',
-  },
-  networkTag: {
-    backgroundColor: '#fff7e6',
-    borderColor: '#e8d5a8',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  networkTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#8a5a00',
-    textTransform: 'uppercase',
+    // The buttons keep their size; the title gives way on a narrow phone.
+    flexShrink: 1,
+    marginRight: 8,
   },
   headerButtons: {
     flexDirection: 'row',
     gap: 8,
+    flexShrink: 0,
+  },
+  networkBanner: {
+    backgroundColor: '#fff7e6',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e8d5a8',
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+  },
+  networkBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8a5a00',
+    letterSpacing: 0.5,
   },
   invoicesButton: {
     borderWidth: 1,

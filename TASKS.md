@@ -14,6 +14,34 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cut
 
 ---
 
+## Your side, condensed (2026-09-15)
+
+The device and ship tasks below overlap heavily. Done in this order they collapse to
+five sessions; everything not listed here is either done, mine to do in the sandbox
+(LICENSE, README, landing page HTML, release notes, thread draft), or cut.
+
+1. **DONE 2026-09-15.** ~~One phone session, screen-recorded (~30 min).~~ Follow
+   `spikes/02-reference-detection.md`: three payments (QR, second QR, direct
+   transfer). Then open **Income** once and tap **Export CSV** to yourself. Then kill
+   the app and reopen it: the rows are still there. That single run closes S2, S3,
+   T6, T15, T16, T19, T20, T22, T25, T26, T28, T29 on the device side. Skipped on
+   purpose: the `sqlite3`-can't-open check, the S1 phone re-run and airplane-mode
+   test, sharing to WhatsApp *and* email (any one share is enough).
+2. **Release APK, locally (~20 min, no EAS).** One keystore, one Gradle command
+   (`cd apps/mobile/android && ./gradlew assembleRelease`), upload the APK to a
+   GitHub Release. I write the signing steps and release notes; the default icon
+   ships if nobody has time for a better one.
+3. **Clean-install check (~10 min).** Uninstall the dev build, install that APK from
+   the Release page, watch one address, see one payment. That is T30 and T33's
+   "installs on a clean device".
+4. **Repo public + landing page (~5 min).** Flip the repo to public and enable GitHub
+   Pages on the `docs/` folder I add. No DNS, no hosting account. T1, T21, T31, T34.
+5. **Video + thread (~30 min).** Trim the recording from step 1 to under three
+   minutes with the phone's editor, upload it unlisted, paste the link into the
+   README and landing page; post the thread from my draft. T32, T35.
+
+---
+
 ## W1 · Thu Aug 13 – Sun Aug 23 — scaffold + spikes
 
 ### `[~]` T1 · Repo, license, README `[M2]`
@@ -67,7 +95,7 @@ the pinned SDK version is written into DECISIONS.md.
 > **Done:** verified on a physical Android device — app launches and renders the
 > placeholder (user-confirmed). W1 is now fully closed.
 
-### `[~]` T6 · op-sqlite + SQLCipher behind `StoragePort`
+### `[x]` T6 · op-sqlite + SQLCipher behind `StoragePort`
 Wire op-sqlite with SQLCipher; key from `expo-secure-store`. Nothing in core imports it.
 **Accept:** the app opens an encrypted DB, writes and reads a row across a restart;
 inspecting the DB file with plain `sqlite3` fails to open it. Lint still passes (proving
@@ -105,13 +133,22 @@ Kill mid-sync; resume. Toggle airplane mode mid-page.
 explicit **go/no-go** and, if no-go, a named fallback (user-supplied RPC URL, or capped
 history depth).
 
-### `[ ]` S2 · **Spike: reference-key detection** (weekend, ~3 h)
+### `[x]` S2 · **Spike: reference-key detection** (weekend, ~3 h)
 > **2026-09-14:** runbook + tooling ready: `spikes/02-reference-detection.md` is the
-> step-by-step (Phantom on devnet, faucets, five payment cases, what to record), and
+> step-by-step (Solflare on devnet, faucets, three payments: QR, second QR, direct
+> transfer — the rest is optional and unit-tested already), and
 > `spikes/02-reference-detection/` has `dump-fixture.mjs` (signature → fixture JSON)
 > and `check-fixture.mjs` (runs the REAL normalizer + matcher over a fixture and
 > says whether owner paging, token-account paging, and tier a would each have seen
 > it). Needs the phone and a devnet wallet — cannot run in the sandbox.
+> **2026-09-15: RUN, verdict GO.** Three QR payments matched by reference, the direct
+> transfer stayed open. On-chain: 3 of the 4 payments never named the wallet (D19 was
+> load-bearing). Four devnet transactions pinned as `packages/core/test/fixtures/s2/`
+> + `test/s2-devnet.test.ts`. Same session closed S3 (PDF rendered, Solflare scanned
+> the QR and prefilled mint/amount/recipient), T6/T15 (kill + reopen, rows intact),
+> T16 + T22 (screen-recorded end to end), T19/T20 (share sheet), T25/T26 (income
+> screen + CSV export). Phantom's Testnet Mode never showed devnet funds — the
+> runbook now says Solflare.
 Devnet: transfer request → payment → `findReference`. Then a **direct transfer that
 ignores the QR**.
 **Accept:** `spikes/02-reference-detection.md` confirms tier-a detection end to end, and
@@ -119,7 +156,7 @@ records fixtures + counts for: exact payment, direct transfer, wrong amount, dup
 amounts in one window, late arrival. Fixtures land in `packages/core/test/fixtures/`.
 Explicitly **does not** implement tier b.
 
-### `[ ]` S3 · **Spike: PDF + QR quality** (weekend, ~3 h)
+### `[x]` S3 · **Spike: PDF + QR quality** (weekend, ~3 h)
 Generate an invoice PDF via `expo-print` with an embedded Solana Pay URL and QR. Scan
 with **Phantom on a physical device**.
 **Accept:** `spikes/03-pdf-qr.md` includes the generated PDF, confirms Phantom parses the
@@ -208,7 +245,7 @@ client underpays, flagging the shortfall separately.
 > the projection enforce one-transfer-one-invoice. Tests: `test/pending.test.ts` and
 > core `test/projection-one-invoice.test.ts`. Eyeball on device in T30.
 
-### `[~]` T15 · Minimal UI: add address + ledger list
+### `[x]` T15 · Minimal UI: add address + ledger list
 Two screens. Paste an address, label it, watch backfill progress; a ledger list of
 events with direction, amount, counterparty, date.
 **Accept:** works on a physical device against devnet; backfill progress is visible and
@@ -227,7 +264,7 @@ survives backgrounding the app.
 > policy). **Remaining on device:** run both screens against devnet on the physical
 > phone — backfill progress visible, survives backgrounding.
 
-### `[ ]` T16 · **Demo path end-to-end on devnet**
+### `[x]` T16 · **Demo path end-to-end on devnet**
 Add address → pay with a Solana Pay transfer request → detected → matched → visible.
 **Accept:** runs on a physical device, start to finish, **recorded as a screen capture**
 (raw footage for the W6 demo video — capture it while it is fresh).
@@ -240,7 +277,15 @@ Add address → pay with a Solana Pay transfer request → detected → matched 
 > `.env`, which release builds also read). S2's runbook
 > (`spikes/02-reference-detection.md`) is the script for this capture.
 
-### `[ ]` T17 · EAS build → GitHub Release APK `[M2]`
+### `[~]` T17 · EAS build → GitHub Release APK `[M2]`
+> **2026-09-15:** no EAS — local Gradle instead. `apps/mobile/plugins/withReleaseSigning.js`
+> (Expo config plugin, applied at prebuild) adds a `release` signing config that reads
+> the keystore + passwords from `~/.gradle/gradle.properties`, and the release build
+> type uses it when present (the build log says which key signed). Patch verified
+> idempotent against the generated build.gradle. `android.versionCode` pinned in
+> app.json. Release notes drafted at `docs/releases/v0.1.0.md`; README has the
+> keystore + build steps. **Remaining on the Mac:** keytool once, prebuild --clean,
+> `./gradlew assembleRelease`, `gh release create v0.1.0 --prerelease …`.
 Configure EAS, produce a signed APK, publish as a GitHub Release.
 **Accept:** the APK downloads from the Release page and installs on a **clean** device
 that has never had a dev build. Ships in W2 deliberately — five weeks before it is due,
@@ -272,7 +317,7 @@ amounts stay bigint end to end.
 > counting human-REJECTED claims toward pass-level ambiguity. Screen gets eyeballed
 > in the W3 device pass alongside T15.
 
-### `[~]` T19 · Invoice PDF via `DocPort`
+### `[x]` T19 · Invoice PDF via `DocPort`
 Core builds the model; `apps/mobile` renders with `expo-print`. Applies S3's findings.
 **Accept:** a multi-line invoice renders with correct totals and no clipped content;
 core has no PDF dependency.
@@ -284,9 +329,14 @@ core has no PDF dependency.
 > external resources) + `src/adapters/docs.ts` DocPort over expo-print/expo-sharing
 > (Expo modules dynamically imported inside the two port methods so the whole HTML
 > path tests under Node). Share button on every invoice row. 18 tests.
+> **2026-09-15 (device):** first Share PDF on the phone failed with "cannot read
+> property 'reload' of undefined" — the dynamic `import()` made Metro serve
+> expo-print as a split bundle at tap time and Expo's loader broke without a live
+> Metro connection. Fixed: static imports; the pure HTML path moved to
+> `src/doc/invoicePdfHtml.ts` so the tests keep running under Node (D17 amended).
 > **Remaining on device:** S3 pass — print/render on the phone, apply findings.
 
-### `[~]` T20 · Solana Pay QR + share sheet
+### `[x]` T20 · Solana Pay QR + share sheet
 Embed the transfer-request URL as a QR; share via the native sheet.
 **Accept:** Phantom scans the QR from the shared PDF and pre-fills the correct mint,
 amount, and reference; sharing works to at least WhatsApp and email.
@@ -306,7 +356,7 @@ Deployed and thin: what it is, one screenshot, a Release download link.
 **Accept:** live on a public URL, responsive, no analytics (D5). Deployed now so DNS,
 hosting, and the deploy step are not discovered in W6.
 
-### `[ ]` T22 · Invoice → payment → match, end to end
+### `[x]` T22 · Invoice → payment → match, end to end
 **Accept:** create an invoice on the phone, share the PDF, pay from another device, watch
 it auto-match. Screen-captured.
 
@@ -352,7 +402,7 @@ Audit columns: rate, rate source, rate date alongside amounts.
 newline; the file opens cleanly in a spreadsheet; unvalued rows are **reported**, not
 silently dropped from the total.
 
-### `[~]` T26 · Income statement screen
+### `[x]` T26 · Income statement screen
 Monthly totals per client from the projection.
 **Accept:** totals match the CSV to the cent.
 > **2026-08-23:** core half done — `monthlyTotalsPerClient` with a test tying monthly

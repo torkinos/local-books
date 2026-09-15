@@ -10,7 +10,7 @@
  *     and the invoice id happens to be base58 *today* -- the renderer must not bet
  *     the page's integrity on that staying true.
  *   - The QR SVG is embedded verbatim. It is generated locally from the pay URL
- *     (adapters/docs.ts), never from user text, and escaping it would break it.
+ *     (doc/invoicePdfHtml.ts), never from user text, and escaping it would break it.
  *
  * No external resources of any kind: the app is offline-first, and the produced PDF
  * gets printed and shared (S3 scans a *shared* PDF) -- a page that phones home for a

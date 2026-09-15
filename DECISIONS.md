@@ -528,8 +528,14 @@ The renderer (`invoiceHtml` + the DocPort adapter) owns layout only: every model
 string is HTML-escaped (pinned field-by-field), the QR is a locally generated SVG
 (`qrcode`, pure JS — no canvas, no native module), and the page references no
 external resource of any kind — a shared PDF must render identically offline and
-years later. expo-print/expo-sharing are loaded dynamically inside the two DocPort
-methods, which is what lets the entire HTML path run under vitest in Node.
+years later. The HTML path (`doc/invoicePdfHtml.ts`) is a separate pure module,
+which is what lets it run under vitest in Node; the DocPort adapter imports
+expo-print/expo-sharing statically. (Amended 2026-09-15: the first cut imported
+them with `import()` inside the methods. In a dev build Metro serves a dynamic
+import as a split bundle fetched at tap time, and Expo's split-bundle loader
+failed on the phone with "cannot read property 'reload' of undefined" the moment
+the dev client was not connected to Metro. Static imports make the modules part
+of the main bundle like every other native module.)
 
 `RenderableDoc.kind` gates hard: income-statement PDFs are on the post-grant
 deferred list, and the adapter throws on them rather than half-rendering. The CSV
@@ -608,7 +614,13 @@ differently and stays deferred.
 
 **Cost:** two more RPC calls per sync pass on mainnet. Within S1's measured budget.
 
-**Revisit if:** S2 shows a wallet app paying into a non-associated token account
+**Verified 2026-09-15 (S2 on devnet, Solflare):** of four real USDC payments into a
+watched wallet, only the first — the one whose ATA-create instruction names the
+wallet — was visible to owner-only paging; the other three named the token account
+alone and were found through the derived ATA. Solflare paid into the associated
+account every time. Pinned in `packages/core/test/s2-devnet.test.ts`.
+
+**Revisit if:** a wallet app is seen paying into a non-associated token account
 (then enumeration is needed after all), or token-2022 stablecoins arrive.
 
 ## D20 — No background sync in v0.1; the framing says "while the app is open"
