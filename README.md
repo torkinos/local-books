@@ -22,15 +22,20 @@ Three things it will never do:
 
 ## Status
 
-v0.1 is under construction toward **Sep 27, 2026** (Superteam Agentic Engineering
-grant). The pure-TypeScript domain core — ingestion, normalization, matching,
-projection, valuation, reporting, document models — is built and tested, and the
-Expo app around it is substantially in place: encrypted SQLite storage, the sync
-engine, ledger / invoices / create-invoice / income screens, tier-a auto-matching,
-invoice PDFs with Solana Pay QR, NBG rate valuation, and CSV export. What remains is
-the on-device pass (spikes S2/S3, demo capture, the Release APK) and the ship work
-in the final weeks. See [PLAN.md](./PLAN.md) for the week-by-week plan and
-[TASKS.md](./TASKS.md) for live task status.
+**v0.1.0 is out.** [Download the APK](https://github.com/torkinos/local-books/releases/latest)
+(Android, ~89 MB, signed), watch the [walkthrough](TODO_VIDEO_URL), or read
+the [release notes](./docs/releases/v0.1.0.md) — they name what v0.1 does *not* do as
+plainly as what it does. The landing page is
+[torkinos.github.io/local-books](https://torkinos.github.io/local-books/).
+
+Built in public for the Superteam Agentic Engineering grant: feature freeze Sep 16 2026,
+v0.1 cut by Sep 27. The whole loop runs on one phone — watch an address, invoice a
+client, share the PDF, the payment matches itself by reference, and the income statement
+exports as CSV with the rate, its source and its date on every row. Deferred on purpose:
+heuristic matching for plain transfers, background sync while the app is closed, tokens
+beyond USDC and USDT, iOS. [PLAN.md](./PLAN.md) has the week-by-week plan,
+[TASKS.md](./TASKS.md) the live task status, and [DECISIONS.md](./DECISIONS.md) every
+non-obvious call with its cost.
 
 ## Build
 
@@ -47,6 +52,22 @@ a release build never reads it). A personal RPC endpoint goes in `apps/mobile/.e
 and applies to every build — including the APK, in plain text, so never share an APK
 built with a keyed URL. `apps/mobile/.env.example` walks through both
 (DECISIONS.md D18).
+
+### Dev build on a device (Android)
+
+You need a JDK 17, the Android SDK (the SDK component of Android Studio is enough) with
+`ANDROID_HOME` exported, and a phone with USB debugging on — or an emulator. The
+`android/` folder is generated, not committed:
+
+```sh
+cd apps/mobile
+npm run android   # prebuilds android/, builds the dev client, installs it, starts Metro
+```
+
+After that first run, `npm start` alone starts Metro against the installed dev client.
+Re-run `npx expo prebuild --platform android --clean` after any change to `app.json` or
+to a native dependency; prebuild is reproducible, so throwing `android/` away is always
+safe.
 
 ### Release build (Android)
 

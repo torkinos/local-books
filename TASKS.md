@@ -17,8 +17,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cut
 ## Your side, condensed (2026-09-15)
 
 The device and ship tasks below overlap heavily. Done in this order they collapse to
-five sessions; everything not listed here is either done, mine to do in the sandbox
-(LICENSE, README, landing page HTML, release notes, thread draft), or cut.
+six sessions, three of them already behind you; everything not listed here is either
+done, mine to do in the sandbox (LICENSE, README, landing page HTML, release notes,
+thread draft), or cut.
 
 1. **DONE 2026-09-15.** ~~One phone session, screen-recorded (~30 min).~~ Follow
    `spikes/02-reference-detection.md`: three payments (QR, second QR, direct
@@ -34,11 +35,42 @@ five sessions; everything not listed here is either done, mine to do in the sand
 3. **DONE 2026-09-16.** ~~Clean-install check (~10 min).~~ Uninstall the dev build, install that APK from
    the Release page, watch one address, see one payment. That is T30 and T33's
    "installs on a clean device".
-4. **Repo public + landing page (~5 min).** Flip the repo to public and enable GitHub
-   Pages on the `docs/` folder I add. No DNS, no hosting account. T1, T21, T31, T34.
-5. **Video + thread (~30 min).** Trim the recording from step 1 to under three
-   minutes with the phone's editor, upload it unlisted, paste the link into the
-   README and landing page; post the thread from my draft. T32, T35.
+4. **Video + links (~30 min).** The raw recording is ~5 min. Trim it to **under three
+   minutes** in the phone's editor — that is M5's wording in the grant milestones and
+   T32's acceptance, and it is the only reason to trim; no copy in the repo names a
+   duration, so a longer cut contradicts nothing but the milestone. Cut the waiting:
+   the backfill, the second QR payment (the first makes the point), and the pauses
+   between tapping and the chain answering. Upload it unlisted. The link has one
+   placeholder in three files — README, `docs/index.html`,
+   `docs/releases/v0.1.0.md`:
+
+   ```sh
+   git grep -l TODO_VIDEO_URL | xargs sed -i '' 's#TODO_VIDEO_URL#<the url>#g'  # macOS sed
+   git grep TODO_VIDEO_URL   # must print nothing
+   ```
+
+   Then `npm run check`, commit, push, and
+   `gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md` so the Release page
+   carries the link too. T32.
+5. **Public + Pages + promote (~15 min).** Do this last: it is the step that is
+   outward-facing. Flip the repo public and verify logged out. Settings → Pages →
+   branch `master`, folder `/docs`. **Retag first:** `v0.1.0` still points at
+   `6e06fec` (Aug 14) — master's stale HEAD when the release was cut, so the Release's
+   source archives are August code. Your local `master` branch has not been checked out
+   since the merge and still sits on that same commit, so tag from the remote, not from
+   it:
+
+   ```sh
+   git fetch origin
+   git tag -f v0.1.0 origin/master && git push -f origin v0.1.0
+   git log -1 --format='%h %s' v0.1.0   # must print the merge commit, not 6e06fec
+   ```
+
+   Confirm the attached APK is the ~89 MB rebuild (not the publicnode one), then
+   promote the pre-release to a release. Branch protection on master while you are in
+   Settings. T1, T4, T21, T31, T33, T34.
+6. **Thread (~10 min).** Post it from `grant-upload/thread-v0.1.md` (gitignored, so it
+   is on the Mac but not in the repo), linking the Release and the landing page. T35.
 
 ---
 
@@ -51,6 +83,9 @@ five sessions; everything not listed here is either done, mine to do in the sand
 > 404) and flips back to public with the Release. A `LICENSE` file was never added —
 > README and package.json say MIT, GitHub shows "no license". Both close under T34's
 > checklist below.
+> **2026-09-16:** `LICENSE` (MIT) added and merged. Only the flip is left: verified
+> again from outside today, `api.github.com/repos/torkinos/local-books` and the HTML
+> page both return 404 logged out. Session 5.
 Initialise the repo, MIT license, README with a one-paragraph description and a build
 section. Push to GitHub **public**.
 **Accept:** repo reachable at a public URL by someone logged out; README states what the
@@ -84,6 +119,9 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > `node-version-file: .nvmrc`, develop added to the push triggers, `engines.node`
 > and the README now say 24. Remaining: push develop, watch it go green, merge to
 > master, enable branch protection.
+> **2026-09-16:** develop pushed and green, PR #1 merged to master (`0a7c212`), so the
+> workflow now runs on both branches. Remaining: branch protection on master, which is
+> a Settings click in session 5.
 
 ### `[x]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
@@ -215,6 +253,9 @@ Re-ingesting the same page changes nothing.
 > clears, refolds); equivalence, idempotence, and op-log-purity tests green. The
 > app-side half of D4 (SQLite tables vs fresh fold) waits on T6/T15 — noted in the
 > test file.
+> **2026-09-16:** that half has been in the tree since T6 —
+> `apps/mobile/test/sqliteStorage.test.ts:279` runs core's `rebuild()` against the real
+> SQLCipher adapter and asserts it matches a live fold. Nothing outstanding.
 Append-only op log; `project(ops, chainEvents)` pure and synchronous; `rebuild()` in the
 app clears the projection and refolds.
 **Accept:** a test folds inputs, clears, rebuilds from the same inputs, and asserts
@@ -351,10 +392,14 @@ amount, and reference; sharing works to at least WhatsApp and email.
 > `DocPort.share`. **Remaining on device:** S3 — Phantom scans the QR from the
 > shared PDF with correct mint/amount/reference; share to WhatsApp and email.
 
-### `[ ]` T21 · Landing page skeleton `[M2]`
+### `[~]` T21 · Landing page skeleton `[M2]`
 Deployed and thin: what it is, one screenshot, a Release download link.
 **Accept:** live on a public URL, responsive, no analytics (D5). Deployed now so DNS,
 hosting, and the deploy step are not discovered in W6.
+> **2026-09-16:** `docs/index.html` + `.nojekyll` committed on master — one file, no
+> scripts, no external resources, no analytics (D5 holds by construction). Hosting is
+> GitHub Pages off `master:/docs`, so there is no DNS and no account. Not live yet:
+> Pages needs the repo public (session 5).
 
 ### `[x]` T22 · Invoice → payment → match, end to end
 **Accept:** create an invoice on the phone, share the PDF, pay from another device, watch
@@ -424,7 +469,7 @@ Monthly totals per client from the projection.
 
 ## W5 · Mon Sep 14 – Sun Sep 20 — cut line, then freeze
 
-### `[~]` T27 · Apply the cut line (Mon–Wed)
+### `[x]` T27 · Apply the cut line (Mon–Wed)
 Cut from the bottom of PROJECT.md line 117 — CSV export first, then valuation.
 **Accept:** anything cut is recorded in DECISIONS.md with a reason and moved to a
 post-grant list. Nothing is left half-built in the tree.
@@ -437,6 +482,11 @@ post-grant list. Nothing is left half-built in the tree.
 > op is folded and exported but nothing produces it (categorization UI is on the
 > deferred list now), and core's unused `CorePorts` interface. Both are removals or
 > one-line notes for T34.
+> **2026-09-16 — closed.** Both decided in **D23**: `CorePorts` removed (nothing ever
+> imported it), `category-assigned` kept and documented at the type as producerless in
+> v0.1 — its fold, its row field and its CSV column are complete and already shipped in
+> the APK, so deleting the op would change an export's shape to remove a column that has
+> to come back. Nothing half-built is left in the tree.
 
 > **Wed Sep 16 — FEATURE FREEZE.** Nothing new after this, including "small" things.
 
@@ -472,10 +522,14 @@ the full loop; log every rough edge as a fix-or-cut decision.
 
 ## W6 · Mon Sep 21 – Sun Sep 27 — ship
 
-### `[ ]` T31 · Landing page content `[M2]`
+### `[~]` T31 · Landing page content `[M2]`
 Real copy, screenshots, the download link, a note that it is watch-only and has no
 backend.
 **Accept:** a stranger understands what it does and who it is for in under 30 seconds.
+> **2026-09-16:** final copy written — the loop in four steps, the three things it will
+> never do, what is in v0.1, known limitations, the real phone screenshot
+> (`docs/screenshot.png`), and both buttons (APK, source). The video slot holds
+> `TODO_VIDEO_URL` until session 4.
 
 ### `[ ]` T32 · Demo video
 Cut from footage captured in T16 and T22 — do not re-shoot from scratch.
@@ -501,11 +555,18 @@ published and linked from the landing page and README.
 > macOS grep. Still open from the review (Low): user-RPC field validation, non-JSON
 > 200 bodies bypassing failover, undated payments missing from the statement, a
 > duplicate invoice after a refresh failure, cache cleanup of shared PDFs/CSVs.
+> **2026-09-16, verified from outside:** the rebuilt APK in the tree is the right one —
+> its JS bundle has zero `publicnode` hits, carries `api.mainnet-beta.solana.com`,
+> `versionCode: 2`, and an APK Signing Block (so it is release-signed, not unsigned or
+> debug-signed). Confirm the *uploaded* asset is that ~89 MB file. Also open: the
+> `v0.1.0` **tag points at `6e06fec` "Delete grant-upload directory" (Aug 14)** —
+> master's HEAD before PR #1 — so the Release's source archives are the August tree.
+> Retag at master and force-push before promoting (session 5).
 Signed APK, release notes, known limitations stated plainly.
 **Accept:** downloads and installs from a logged-out browser on a clean device; the loop
 works; release notes name the deferred items so expectations are set.
 
-### `[ ]` T34 · Repo tidy for grant review `[M2]`
+### `[~]` T34 · Repo tidy for grant review `[M2]`
 README, architecture note, `DECISIONS.md` current, build instructions that work from a
 clean clone.
 **Accept:** someone else follows the README on a fresh machine and gets a running dev
@@ -515,9 +576,19 @@ build without asking a question.
 > toolchain + `prebuild`/`run:android` steps; fix the T12 note (its app-side D4
 > test already exists in `sqliteStorage.test.ts`); remove core's unused `CorePorts`
 > interface; decide the `category-assigned` op (nothing produces it — remove or note).
+> **2026-09-16:** five of six done. `LICENSE` added; README rewritten — Status now
+> points at the Release, the APK, the landing page and the video, and a new "Dev build
+> on a device (Android)" section names the JDK, the SDK, `ANDROID_HOME` and the two
+> commands, so a clean clone reaches a running dev build without asking; the T12 note is
+> corrected; `CorePorts` removed and `category-assigned` documented (D23). Remaining:
+> flip the repo public (session 5).
 
 ### `[ ]` T35 · Final build-in-public thread
 **Accept:** posted, links the Release and the landing page.
+> **2026-09-16:** draft written to `grant-upload/thread-v0.1.md` — seven posts, the
+> numbers are the real ones from the S2 device pass. It is gitignored on purpose
+> (`grant-upload/`): a marketing draft does not belong in a public repo. Fill the three
+> bracketed links before posting.
 
 ---
 

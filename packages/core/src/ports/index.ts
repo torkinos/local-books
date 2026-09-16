@@ -258,14 +258,4 @@ export interface NlQueryPort {
   readonly __deferred: 'post-grant: NL -> validated structured query';
 }
 
-/** Every port the app must supply for core to run. */
-export interface CorePorts {
-  readonly rpc: RpcPort;
-  readonly storage: StoragePort;
-  readonly clock: ClockPort;
-  readonly rates: RatePort;
-  readonly docs: DocPort;
-  readonly referenceKeys: ReferenceKeyPort;
-}
-
 export type { Valuation };

@@ -154,6 +154,13 @@ export interface AddressUnwatchedOp extends OpBase {
   readonly address: Address;
 }
 
+/**
+ * Manual categorization of one transfer. Nothing in v0.1 writes this op -- the
+ * categorization screen is post-grant (PROJECT.md's deferred list). The seam below it
+ * is complete: the fold keeps a category per transfer, `incomeRows()` puts it on every
+ * row, and `category` is a column in the CSV an accountant already receives, so the
+ * export keeps its shape when the screen lands (D23).
+ */
 export interface CategoryAssignedOp extends OpBase {
   readonly type: 'category-assigned';
   readonly signature: Signature;
