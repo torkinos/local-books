@@ -19,6 +19,7 @@ export interface IncomeRow {
   readonly valuation: Valuation | null;
   readonly invoiceId: string | null;
   readonly clientName: string | null;
+  /** Always null in v0.1: nothing writes `category-assigned` yet (D23). */
   readonly category: string | null;
 }
 

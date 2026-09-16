@@ -239,7 +239,7 @@ gets revised before anything is built on top of it.
 > demo shape — watch a new wallet, then pay it). Both pinned in `backfill.test.ts`;
 > `BackfillCheckpoint.complete` is documented as NOT a one-way latch.
 
-## D9 — Endpoint order is fixed (user RPC when set → publicnode → mainnet-beta), no JSON-RPC batching
+## D9 — Endpoint order is fixed (user RPC when set → mainnet-beta), no JSON-RPC batching
 
 **Date:** 2026-08-23 · **Status:** accepted — from S1 measurements
 
@@ -265,8 +265,8 @@ driver's `pauseMs` (D8) stays the only throttle.
 Revisit only if the on-device re-run of the S1 harness (W2 device pass) contradicts the
 datacenter-measured numbers.
 
-> **2026-09-16 (amended): publicnode removed; mainnet-beta is the only public
-> endpoint.** While picking a mainnet address for the landing-page screenshot,
+> **2026-09-16 (amended, heading reconciled a second time): publicnode removed;
+> mainnet-beta is the only public endpoint.** While picking a mainnet address for the landing-page screenshot,
 > publicnode returned 2 signatures for a wallet that mainnet-beta shows with 1000+
 > going back to August, its "next page" was empty, and `getTransaction` for the
 > August transaction returned null. In August (S1) the same endpoint served 10,000
@@ -727,3 +727,28 @@ review.
 
 **Cost:** the CI badge 404s and no outside eyes until then. **Revisit if:** the
 grant reviewers ask for repo access before Sep 27.
+
+## D23 — Two seams with no producer: `CorePorts` removed, `category-assigned` kept
+
+**Date:** 2026-09-16 · **Status:** accepted — closes the pair T27 left open
+
+The Sep 14 audit found two things in core that nothing uses. The freeze is the moment
+to say what each one is, rather than leave a reviewer to guess.
+
+`CorePorts` — an aggregate of the six ports the app supplies — was never imported. The
+app wires each port at the call site that needs it, and an interface that hands all six
+to anything only invites the god-object that takes every port to do one job. Removed.
+
+`category-assigned` has no producer either, but it is not dead code: the projection
+folds it into `categories`, `incomeRows()` puts that value on every row, and `category`
+is a column in the CSV an accountant already receives. What is missing is one screen,
+and that screen is on the post-grant list. Deleting the op would change the shape of an
+export that has already shipped in the v0.1 APK, to remove a column that has to come
+back. It stays, documented at the type as producerless in v0.1, and the column ships
+empty rather than absent.
+
+**Cost:** an `Op` variant the v0.1 app can never emit, and one always-empty CSV column.
+Both are now visible in the types instead of implied.
+
+**Revisit if:** the categorization screen does not land post-grant either — then the
+column goes with it, in the same change.
