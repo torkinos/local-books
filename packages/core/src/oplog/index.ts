@@ -10,7 +10,7 @@
  * op (`match-rejected` undoes `match-confirmed`), so the history of what the user
  * decided, and when, survives intact -- which is the whole point for an audit trail.
  */
-import type { Op, UnixSeconds } from '../types/index.js';
+import type { Op } from '../types/index.js';
 
 /**
  * Ordering for a fold.
@@ -22,18 +22,6 @@ import type { Op, UnixSeconds } from '../types/index.js';
  */
 export function sortOps(ops: readonly Op[]): readonly Op[] {
   return [...ops].sort((a, b) => (a.at !== b.at ? a.at - b.at : a.id.localeCompare(b.id)));
-}
-
-/** Drop ops sharing an id. Replay and future replication both deliver duplicates. */
-export function dedupOps(ops: readonly Op[]): readonly Op[] {
-  const seen = new Set<string>();
-  const out: Op[] = [];
-  for (const op of ops) {
-    if (seen.has(op.id)) continue;
-    seen.add(op.id);
-    out.push(op);
-  }
-  return out;
 }
 
 /**
@@ -69,9 +57,4 @@ export function stableStringify(value: unknown): string {
     .filter(([, v]) => v !== undefined)
     .sort(([a], [b]) => a.localeCompare(b));
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
-}
-
-/** Ops at or before `at`. Backs "what did the books say when I filed?" */
-export function opsAsOf(ops: readonly Op[], at: UnixSeconds): readonly Op[] {
-  return sortOps(ops).filter((op) => op.at <= at);
 }

@@ -78,11 +78,15 @@ describe('backfillAddress', () => {
     const firstRpc = new FakeRpc([
       page([sigInfo(5), sigInfo(4)], sig(4)),
       page([sigInfo(3), sigInfo(2)], sig(2)),
+      page([sigInfo(1)], null),
     ]);
 
-    // Simulate the process dying after one page: pull exactly one value, then stop.
+    // The durability handshake: a page's checkpoint is written only when the consumer
+    // pulls AGAIN -- i.e. after its loop body persisted the page's data. Pull page 1,
+    // pull once more (acknowledging page 1), then die.
     const gen = backfillAddress(ADDRESS, { rpc: firstRpc, storage, clock: fixedClock() }, OPTIONS);
-    await gen.next();
+    await gen.next(); // page 1 handed over
+    await gen.next(); // consumer came back for more => page 1 was persisted => checkpoint lands
     await gen.return(undefined);
 
     expect((await storage.getCheckpoint(ADDRESS))?.oldestSeen).toBe(sig(4));
@@ -95,6 +99,26 @@ describe('backfillAddress', () => {
 
     expect(secondRpc.calls[0]?.before).toBe(sig(4));
     expect(progress.at(-1)).toMatchObject({ kind: 'done', reason: 'history-exhausted' });
+  });
+
+  it('never durably advances the cursor past a page the consumer did not acknowledge', async () => {
+    // The other half of the handshake: die BEFORE pulling again (i.e. before the
+    // consumer stored the page) and the checkpoint must be untouched -- the page is
+    // re-fetched on resume and dedup absorbs the replay. Checkpointing first would
+    // skip data forever: a silent hole in income history, invisible to the user.
+    const storage = new FakeStorage();
+    const rpc = new FakeRpc([page([sigInfo(5), sigInfo(4)], sig(4))]);
+
+    const gen = backfillAddress(ADDRESS, { rpc, storage, clock: fixedClock() }, OPTIONS);
+    await gen.next(); // page handed over, but the consumer dies while processing it
+    await gen.return(undefined);
+
+    expect(await storage.getCheckpoint(ADDRESS)).toBeNull();
+
+    // Resume starts from the tip and re-fetches the same page.
+    const resumeRpc = new FakeRpc([page([sigInfo(5), sigInfo(4)], sig(4)), page([], null)]);
+    await drain(backfillAddress(ADDRESS, { rpc: resumeRpc, storage, clock: fixedClock() }, OPTIONS));
+    expect(resumeRpc.calls[0]?.before).toBeUndefined();
   });
 
   it('does not re-walk history once an address is complete', async () => {
@@ -189,6 +213,83 @@ describe('syncNewSignatures', () => {
     );
 
     expect(progress.at(-1)).toMatchObject({ kind: 'done', reason: 'history-exhausted' });
+  });
+
+  it('an address that was EMPTY at first walk is not frozen: its first payment still lands', async () => {
+    // First walk found zero history: complete:true with no newestSeen. The
+    // completeness flag must not short-circuit the next sync, or a freshly created
+    // wallet would never ingest anything, ever.
+    const storage = new FakeStorage();
+    await storage.putCheckpoint({
+      address: ADDRESS,
+      oldestSeen: null,
+      newestSeen: null,
+      complete: true,
+      updatedAt: fixedClock().now(),
+    });
+
+    const rpc = new FakeRpc([page([sigInfo(1)], sig(1)), page([], null)]);
+    const progress = await drain(
+      syncNewSignatures(ADDRESS, { rpc, storage, clock: fixedClock() }, OPTIONS),
+    );
+
+    const emitted = progress
+      .filter((p): p is Extract<BackfillProgress, { kind: 'page' }> => p.kind === 'page')
+      .flatMap((p) => p.signatures.map((s) => s.signature));
+    expect(emitted).toEqual([sig(1)]);
+    expect(progress.at(-1)).toMatchObject({ kind: 'done', reason: 'history-exhausted' });
+    const checkpoint = await storage.getCheckpoint(ADDRESS);
+    expect(checkpoint?.newestSeen).toBe(sig(1));
+    expect(checkpoint?.complete).toBe(true);
+  });
+
+  it('a page budget hit mid-gap reopens the walk instead of jumping the watermark', async () => {
+    // The watermark is sig(1); four newer pages exist but the budget allows two.
+    // Advancing newestSeen to the tip and reporting caught-up would jump the
+    // watermark over sigs 5..2 forever -- a silent hole. The run must instead
+    // convert the remainder into a resumable backfill.
+    const storage = new FakeStorage();
+    await storage.putCheckpoint({
+      address: ADDRESS,
+      oldestSeen: sig(1),
+      newestSeen: sig(1),
+      complete: true,
+      updatedAt: fixedClock().now(),
+    });
+
+    const rpc = new FakeRpc([
+      page([sigInfo(9), sigInfo(8)], sig(8)),
+      page([sigInfo(7), sigInfo(6)], sig(6)),
+    ]);
+    const progress = await drain(
+      syncNewSignatures(ADDRESS, { rpc, storage, clock: fixedClock() }, {
+        ...OPTIONS,
+        maxPagesPerRun: 2,
+      }),
+    );
+
+    expect(progress.at(-1)).toMatchObject({ kind: 'done', reason: 'page-budget-reached' });
+    const reopened = await storage.getCheckpoint(ADDRESS);
+    expect(reopened).toMatchObject({
+      newestSeen: sig(9), // the yielded pages WERE consumed; the new tip stands
+      oldestSeen: sig(6), // and the walk resumes exactly where paging stopped
+      complete: false,
+    });
+
+    // The next run is a backfill again and picks up from the reopened cursor,
+    // walking down past the old watermark until history genuinely exhausts.
+    const rpc2 = new FakeRpc([
+      page([sigInfo(5), sigInfo(4)], sig(4)),
+      page([sigInfo(3), sigInfo(2)], sig(2)),
+      page([sigInfo(1)], sig(1)),
+      page([], null),
+    ]);
+    const resumed = await drain(
+      backfillAddress(ADDRESS, { rpc: rpc2, storage, clock: fixedClock() }, OPTIONS),
+    );
+    expect(rpc2.calls[0]).toMatchObject({ before: sig(6) });
+    expect(resumed.at(-1)).toMatchObject({ kind: 'done', reason: 'history-exhausted' });
+    expect(await storage.getCheckpoint(ADDRESS).then((c) => c?.complete)).toBe(true);
   });
 });
 

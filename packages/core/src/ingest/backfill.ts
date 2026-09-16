@@ -155,22 +155,32 @@ export async function* backfillAddress(
     // syncs stop.
     const newestSeen = checkpoint.newestSeen ?? page.signatures[0]!.signature;
 
-    checkpoint = {
+    const advanced: BackfillCheckpoint = {
       ...checkpoint,
       newestSeen,
       oldestSeen: page.nextBefore,
       complete: page.nextBefore === null,
       updatedAt: clock.now(),
     };
-    await storage.putCheckpoint(checkpoint);
 
+    // Yield FIRST, checkpoint AFTER control returns. Generator semantics make this
+    // the durability handshake: the consumer's loop body (persist this page's
+    // signatures/events) runs to completion before it pulls the next item, and only
+    // that pull executes the putCheckpoint below. So the cursor never durably
+    // advances past data the caller has not stored -- a kill mid-processing replays
+    // the page (dedup absorbs it), which is recoverable; advancing first would leave
+    // a permanent hole in the ledger, which is not. A page consumed but never
+    // followed by another pull is deliberately un-checkpointed for the same reason.
     yield {
       kind: 'page',
       signatures: page.signatures,
-      checkpoint,
+      checkpoint: advanced,
       pauseMs: options.basePaceMs,
       pagesFetched,
     };
+
+    checkpoint = advanced;
+    await storage.putCheckpoint(checkpoint);
 
     if (checkpoint.complete) {
       yield { kind: 'done', checkpoint, reason: 'history-exhausted' };
@@ -214,7 +224,15 @@ export async function* syncNewSignatures(
   const checkpoint = await storage.getCheckpoint(address);
 
   // Nothing ingested yet: incremental sync is meaningless, run a backfill instead.
+  //
+  // A checkpoint that is complete but has NO newestSeen means the address had zero
+  // history when first walked. Its first-ever payment still has to land, so the
+  // completeness flag must not short-circuit that walk -- left alone, backfill would
+  // yield 'caught-up' forever and the address would be frozen empty. Reopen it.
   if (!checkpoint?.newestSeen) {
+    if (checkpoint?.complete) {
+      await storage.putCheckpoint({ ...checkpoint, complete: false, updatedAt: clock.now() });
+    }
     yield* backfillAddress(address, deps, options);
     return;
   }
@@ -223,6 +241,7 @@ export async function* syncNewSignatures(
   let before: Signature | undefined;
   let pagesFetched = 0;
   let newestThisRun: Signature | null = null;
+  let reachedWatermark = false;
 
   while (pagesFetched < options.maxPagesPerRun) {
     const page = await rpc.getSignatures(address, {
@@ -231,7 +250,10 @@ export async function* syncNewSignatures(
     });
     pagesFetched += 1;
 
-    if (page.signatures.length === 0) break;
+    if (page.signatures.length === 0) {
+      reachedWatermark = true;
+      break;
+    }
     newestThisRun ??= page.signatures[0]!.signature;
 
     const hitIndex = page.signatures.findIndex((s) => s.signature === watermark);
@@ -247,8 +269,34 @@ export async function* syncNewSignatures(
       };
     }
 
-    if (hitIndex !== -1 || page.nextBefore === null) break;
+    if (hitIndex !== -1 || page.nextBefore === null) {
+      reachedWatermark = true;
+      break;
+    }
     before = page.nextBefore;
+  }
+
+  if (!reachedWatermark) {
+    // Page budget ran out mid-gap. Advancing the watermark to this run's tip now
+    // would jump it over signatures never fetched -- a permanent hole reported as
+    // success, exactly what D8 forbids. Instead, convert the unwalked remainder
+    // into a resumable backfill: newestSeen moves to the new tip (those pages WERE
+    // yielded and persisted), complete flips false, and oldestSeen becomes the
+    // paging cursor, so the next run resumes backfillAddress from here and walks
+    // down until history exhausts. Re-walking pages below the old watermark costs
+    // signature paging plus re-hydrating any transactions that normalized to zero
+    // events (hydration skips only signatures with stored events); dedup absorbs
+    // the replays.
+    const reopened: BackfillCheckpoint = {
+      ...checkpoint,
+      newestSeen: newestThisRun ?? checkpoint.newestSeen,
+      oldestSeen: before ?? null,
+      complete: false,
+      updatedAt: clock.now(),
+    };
+    await storage.putCheckpoint(reopened);
+    yield { kind: 'done', checkpoint: reopened, reason: 'page-budget-reached' };
+    return;
   }
 
   const updated: BackfillCheckpoint = {

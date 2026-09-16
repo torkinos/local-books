@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Local Books",
+    "slug": "local-books",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "android": {
+      "package": "com.localbooks.app",
+      "versionCode": 2,
+      "allowBackup": false,
+      "edgeToEdgeEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.localbooks.app",
+      "supportsTablet": false
+    },
+    "plugins": [
+      "expo-sharing",
+      "./plugins/withReleaseSigning.js"
+    ]
+  }
+}

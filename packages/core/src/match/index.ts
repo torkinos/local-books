@@ -31,8 +31,10 @@ export interface MatchCandidate {
   readonly instructionIndex: number;
   readonly tier: MatchTier;
   /**
-   * True only for tier a. Tier b always requires a human tap, so this stays false
-   * regardless of how confident a future heuristic feels.
+   * True only for tier a, and only when the transaction admits exactly one
+   * (transfer, invoice) pairing -- see matchByReference. Tier b always requires a
+   * human tap, so this stays false regardless of how confident a future heuristic
+   * feels.
    */
   readonly autoApplicable: boolean;
   /** Human-readable justification, surfaced in the confirm UI and in exports. */
@@ -48,6 +50,18 @@ export interface MatchCandidate {
  *
  * Failed transactions are skipped -- a reverted transfer moved no money, and booking it
  * as income would overstate turnover.
+ *
+ * **Auto-apply requires an unambiguous pairing.** References are recovered at
+ * transaction level (jsonParsed drops per-instruction account lists -- see
+ * normalize/extract.ts), so every event in a transaction carries every reference in
+ * it. Within one transaction, a candidate auto-applies only when its transfer maps to
+ * exactly one invoice AND its invoice is claimed by exactly one transfer -- anything
+ * else (one transfer carrying two invoice references, one invoice's reference on two
+ * transfers) admits multiple pairings, and picking one automatically would double-book
+ * the same money. Ambiguous candidates are still emitted -- the user should see them
+ * -- but with `autoApplicable: false`, in the same spirit as line 81's ban on
+ * auto-confirming heuristics: when the chain does not say which transfer paid which
+ * invoice, a human does.
  */
 export function matchByReference(
   events: readonly ChainEvent[],
@@ -56,7 +70,12 @@ export function matchByReference(
   const byReference = new Map<ReferenceKey, InvoiceCreatedOp>();
   for (const invoice of invoices) byReference.set(invoice.reference, invoice);
 
-  const matches: MatchCandidate[] = [];
+  // First pass: collect candidates per transaction, so ambiguity is judged on what a
+  // whole transaction admits, not event by event.
+  const bySignature = new Map<
+    Signature,
+    Array<{ readonly invoice: InvoiceCreatedOp; readonly event: ChainEvent; readonly reference: ReferenceKey }>
+  >();
 
   for (const event of events) {
     if (!event.succeeded) continue;
@@ -67,14 +86,34 @@ export function matchByReference(
     for (const reference of event.references) {
       const invoice = byReference.get(reference);
       if (!invoice) continue;
+      const list = bySignature.get(event.signature) ?? [];
+      list.push({ invoice, event, reference });
+      bySignature.set(event.signature, list);
+    }
+  }
 
+  const matches: MatchCandidate[] = [];
+  for (const candidates of bySignature.values()) {
+    const perEvent = new Map<number, number>();
+    const perInvoice = new Map<string, number>();
+    for (const c of candidates) {
+      perEvent.set(c.event.instructionIndex, (perEvent.get(c.event.instructionIndex) ?? 0) + 1);
+      perInvoice.set(c.invoice.invoiceId, (perInvoice.get(c.invoice.invoiceId) ?? 0) + 1);
+    }
+
+    for (const { invoice, event, reference } of candidates) {
+      const unambiguous =
+        perEvent.get(event.instructionIndex) === 1 && perInvoice.get(invoice.invoiceId) === 1;
       matches.push({
         invoiceId: invoice.invoiceId,
         signature: event.signature,
         instructionIndex: event.instructionIndex,
         tier: 'reference',
-        autoApplicable: true,
-        rationale: `Reference ${truncate(reference)} on ${truncate(event.signature)}`,
+        autoApplicable: unambiguous,
+        rationale: unambiguous
+          ? `Reference ${truncate(reference)} on ${truncate(event.signature)}`
+          : `Reference ${truncate(reference)} on ${truncate(event.signature)}; this transaction ` +
+            `admits more than one transfer-to-invoice pairing -- confirm which pays which`,
       });
     }
   }

@@ -71,7 +71,18 @@ export interface RpcPort {
     opts: { readonly before?: Signature; readonly limit: number },
   ): Promise<SignaturePage>;
 
-  /** Fetch full transactions. Batched because per-signature round-trips dominate backfill. */
+  /**
+   * Fetch full transactions, in order. May return FEWER than requested, for two
+   * reasons: an adapter that hits throttling or a network failure mid-batch returns
+   * what it fetched so far instead of discarding paid-for round-trips, and a
+   * transaction the serving node does not know (null result) is OMITTED rather than
+   * returned as an empty shell -- returning it would let the caller count it as
+   * hydrated and durably checkpoint past a payment that was never obtained. Callers
+   * detect both shortfalls with `missingSignatures` and retry the remainder later
+   * (rotating endpoints if this one keeps coming up empty). A failure with zero
+   * progress throws (RateLimitedError for throttling), so a caller getting nothing
+   * still sees why.
+   */
   getTransactions(signatures: readonly Signature[]): Promise<readonly RawTransaction[]>;
 
   /** Identifies the endpoint in spike measurements and failover logs. */
@@ -130,7 +141,14 @@ export interface BackfillCheckpoint {
   readonly oldestSeen: Signature | null;
   /** Newest signature ever ingested. Incremental sync stops when it reaches this. */
   readonly newestSeen: Signature | null;
-  /** True once history has been walked to genesis; initial backfill never repeats. */
+  /**
+   * True when the walk has exhausted known history. NOT a one-way latch:
+   * syncNewSignatures deliberately resets it to false when it was recorded with no
+   * newestSeen (the address had zero history at first walk -- its first payment
+   * must still land) and when an incremental run exhausts its page budget mid-gap
+   * (the unwalked remainder becomes a resumable backfill). Consumers re-read it
+   * every run; never cache derived state keyed on complete:true.
+   */
   readonly complete: boolean;
   readonly updatedAt: UnixSeconds;
 }
@@ -216,7 +234,8 @@ export interface ReferenceKeyPort {
 // ---------------------------------------------------------------------------
 
 /**
- * Multi-device replication. Post-grant, over Autobase/Hyperswarm on Bare.
+ * Multi-device replication. Post-grant, over a P2P transport with append-only-log
+ * replication.
  *
  * Present so the op log is written against a replication-shaped interface from day
  * one; v0.1 ships single-device and nothing implements this.

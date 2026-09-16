@@ -8,7 +8,7 @@ Local-first mobile app for freelancers and contractors paid in stablecoins on So
 
 ## Context
 
-- **Team:** solo engineer (React Native / TypeScript / Electron; production experience with client-side cryptography and P2P/local-first systems on the Pear/Bare stack) + co-founder (business finance & project management: report templates, tax logic, pilot recruitment, milestone reporting).
+- **Team:** solo engineer (React Native / TypeScript / Electron; production experience with client-side cryptography and P2P/local-first systems) + co-founder (business finance & project management: report templates, tax logic, pilot recruitment, milestone reporting).
 - **Funding path:** Superteam Agentic Engineering grant (v0.1, this repo) → Solana Foundation instagrant application via Superteam Georgia (full MVP) → larger ecosystem funding later.
 - **Build mode:** part-time (~6–8 h/week), AI-assisted (agentic engineering), built in public.
 - **v0.1 target date: Sunday, September 27, 2026.** (Moved from Sep 13; see DECISIONS.md D0.)
@@ -59,7 +59,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 - **Mobile-first: React Native (Expo + prebuild/dev client).** Android is the primary target (better background execution, Solana dApp Store distribution later, dominant in the beachhead market). iOS follows with known limitations.
 - **Desktop later** (post-grant), sharing the same core, as the accountant-facing read-only surface.
 - **Architecture consequence:** all domain logic (ingestion, normalization, matching, valuation, event log, report generation) lives in a **pure-TypeScript core package with zero UI/platform dependencies**. The RN app is a shell over it; the future desktop app reuses it unchanged.
-- **Accepted mobile constraint:** serverless means no push notifications (APNs/FCM require a sender). Payment detection is on-app-open plus best-effort background: Android WorkManager periodic sync (near-real-time feasible), iOS BGAppRefreshTask (opportunistic only). In-app framing: "checks when you open, and periodically in the background on Android" — never promise real-time.
+- **Accepted mobile constraint:** serverless means no push notifications (APNs/FCM require a sender). Payment detection is on-app-open plus, post-grant, best-effort background: Android WorkManager periodic sync (near-real-time feasible), iOS BGAppRefreshTask (opportunistic only). v0.1 ships foreground-only (DECISIONS.md D20). In-app framing: "checks when you open the app, and while it is open" — never promise real-time.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 
 - User adds Solana address(es); track associated token accounts (ATAs) for USDC/USDT and other SPL mints.
 - Backfill: `getSignaturesForAddress` (paginated) → `getTransaction` (jsonParsed). Extract SOL system transfers, SPL token transfers (pre/post token balances), memo contents, blockTime, counterparty, signature.
-- Incremental: refresh on app open + background job (see platform constraints). No WebSocket dependency.
+- Incremental: refresh on app open and while the app is open (background job post-grant, see platform constraints). No WebSocket dependency.
 - Backfill must be **resumable/checkpointed** (app can be killed mid-sync) and mindful of metered connections (chunked; wifi-preferred option).
 - RPC strategy: rotation/failover across public endpoints; power users can paste their own endpoint (e.g. Helius). No backend of ours anywhere.
 - Normalize into an append-only ledger-event log; idempotent; dedup by signature.
@@ -89,7 +89,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 
 - Event-sourced core: user actions (invoice created, match confirmed, category assigned) are operations in an append-only local op log. Chain-derived data is **not** part of the op log — it is re-derivable from RPC; only human decisions are source-of-truth.
 - Materialized view: operations fold into local SQLite (op-sqlite or expo-sqlite — decision recorded in DECISIONS.md), which serves all queries and reports. SQLite is a disposable index; the op log is the source of truth.
-- **v0.1 ships single-device.** The op-log abstraction exists from day one; replication (device pairing, accountant read-only key, desktop) is post-grant, designed for Autobase/Hyperswarm over the Bare runtime.
+- **v0.1 ships single-device.** The op-log abstraction exists from day one; replication (device pairing, accountant read-only key, desktop) is post-grant, designed around append-only-log replication over a P2P transport.
 - Encrypted at rest.
 
 ### 5. Local AI layer — deferred, strictly optional
@@ -123,7 +123,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 5. Heuristic matching tier (b) — first to defer
 6. Categorization UX beyond minimal — second to defer
 
-**Deferred post-grant:** heuristic-matching polish, iOS hardening, P2P multi-device sync, desktop/accountant surface, OCR, NL queries, DAO/multisig ingestion, token-2022 edge cases, Koinly-compatible CSV, Solana dApp Store submission, monthly report PDFs beyond the basic income statement.
+**Deferred post-grant:** heuristic-matching polish, iOS hardening, P2P multi-device sync, desktop/accountant surface, OCR, NL queries, DAO/multisig ingestion, token-2022 edge cases, Koinly-compatible CSV, Solana dApp Store submission, monthly report PDFs beyond the basic income statement, periodic background sync (WorkManager; D20), an in-app settings screen for the RPC endpoint (build-time only in v0.1; D18), categorization UI.
 
 ## Known risks (de-risk in week 1)
 

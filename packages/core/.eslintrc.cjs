@@ -10,8 +10,9 @@
  * crypto directly. Those arrive through ports (see src/ports/) so the same code runs
  * on a phone, on a desktop, and in a Node test process against fixtures.
  *
- * There is a test that verifies this guard actually fires -- see the `check:purity`
- * script. A guard nobody has watched fail is not known to work.
+ * `npm run check:purity` (scripts/check-purity.mjs) verifies this guard actually
+ * fires by linting a canary file full of banned constructs and demanding failure.
+ * A guard nobody has watched fail is not known to work.
  */
 const RESTRICTED_PATTERNS = [
   {
@@ -27,7 +28,7 @@ const RESTRICTED_PATTERNS = [
     message: 'core is platform-free (PROJECT.md line 61). Keep Expo in apps/mobile.',
   },
   {
-    group: ['@op-engineering/*'],
+    group: ['@op-engineering/*', 'better-sqlite3', 'expo-sqlite', '*sqlite*'],
     message: 'core does not know about SQLite. Persist through StoragePort.',
   },
   {
@@ -42,6 +43,7 @@ const RESTRICTED_PATTERNS = [
 const NODE_BUILTINS = [
   'fs', 'path', 'os', 'net', 'http', 'https', 'crypto', 'child_process',
   'worker_threads', 'stream', 'zlib', 'dns', 'tls', 'cluster', 'perf_hooks',
+  'sqlite',
 ];
 
 module.exports = {
@@ -78,6 +80,17 @@ module.exports = {
       { name: 'localStorage', message: 'Persistence belongs to StoragePort.' },
       { name: 'window', message: 'core is UI-free.' },
       { name: 'document', message: 'core is UI-free.' },
+      // Timers are the caller's job (DECISIONS.md D8): the backfill driver REQUESTS
+      // pauses by returning pauseMs, and whoever drives it sleeps. A timer inside
+      // core would smuggle real time back into logic the tests run instantly.
+      {
+        name: 'setTimeout',
+        message: 'No timers in core: request a pause (return pauseMs) and let the caller sleep (D8).',
+      },
+      {
+        name: 'setInterval',
+        message: 'No timers in core: request a pause (return pauseMs) and let the caller sleep (D8).',
+      },
     ],
     'no-restricted-properties': [
       'error',
@@ -90,6 +103,16 @@ module.exports = {
         object: 'Math',
         property: 'random',
         message: 'Inject randomness so reference-key generation is reproducible in tests.',
+      },
+    ],
+    // Zero-argument `new Date()` reads the ambient clock -- the same platform read as
+    // Date.now() in different spelling. With an argument it is a deterministic
+    // conversion (report/index.ts isoDate) and stays allowed.
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+        message: 'new Date() reads the ambient clock. Inject time via ClockPort.',
       },
     ],
 

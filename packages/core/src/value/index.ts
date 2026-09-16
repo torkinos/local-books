@@ -22,6 +22,11 @@ import type { FiatCode, TokenAmount, UnixSeconds, Valuation } from '../types/ind
 export const STABLE_MINTS: ReadonlyMap<string, string> = new Map([
   ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'USDC'],
   ['Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', 'USDT'],
+  // Circle's devnet USDC: the T16/T22 demo and W4's "month of devnet income exports
+  // to CSV" both run on devnet, so devnet USDC must value 1:1 like its mainnet
+  // sibling. Harmless on mainnet -- mint addresses are globally unique keys and this
+  // one only exists on devnet.
+  ['4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 'USDC'],
 ]);
 
 export function isStable(amount: TokenAmount): boolean {
@@ -74,6 +79,19 @@ export function formatUnits(raw: bigint, decimals: number): string {
   const whole = digits.slice(0, digits.length - decimals);
   const fraction = decimals === 0 ? '' : `.${digits.slice(digits.length - decimals)}`;
   return `${negative ? '-' : ''}${whole}${fraction}`;
+}
+
+/**
+ * formatUnits with trailing fraction zeros trimmed: `1_000_000n` at 6 -> `"1"`,
+ * `1_500_000n` -> `"1.5"`. For display and for Solana Pay URLs, where `amount=1`
+ * and `amount=1.000000` are the same value but only one reads like a price tag.
+ * Built from the exact digits -- never exponent notation, never a float.
+ */
+export function formatUnitsTrimmed(raw: bigint, decimals: number): string {
+  const exact = formatUnits(raw, decimals);
+  if (!exact.includes('.')) return exact;
+  const trimmed = exact.replace(/\.?0+$/, '');
+  return trimmed === '' || trimmed === '-' ? '0' : trimmed;
 }
 
 /** Decimal string -> smallest-unit bigint. Throws rather than truncating silently. */
