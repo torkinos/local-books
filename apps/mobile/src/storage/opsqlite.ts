@@ -8,9 +8,12 @@
  * writing the user's financial records to disk in plaintext.
  *
  * The database key is 32 CSPRNG bytes minted on first launch and stored ONLY in
- * SecureStore (AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: available to background sync
- * after boot, never migrated by backup). It is never derived from anything and never
- * logged.
+ * SecureStore. On Android that means AES-GCM under a hardware Keystore key, which
+ * never leaves the device -- the `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` option below
+ * is honoured on iOS only. Because no Android backup can carry the Keystore key, a
+ * restored backup of the books could never be opened; `android.allowBackup` is
+ * therefore false in app.json (D12), so the books are never backed up at all. The
+ * key is never derived from anything and never logged.
  *
  * **The key-loss rule** (D12) -- no key + provisioning marker => KeyLostError, never
  * a silent re-mint -- lives as a decision table in keyProvision.ts, where the test

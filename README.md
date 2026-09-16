@@ -70,13 +70,16 @@ signed with it or Android refuses to update the installed app. Then, per release
 
 ```sh
 cd apps/mobile
-grep -L EXPO_PUBLIC_RPC_URL .env 2>/dev/null || echo "REMOVE the keyed RPC URL from .env first"
+grep -q EXPO_PUBLIC_RPC_URL .env 2>/dev/null && echo "REMOVE the keyed RPC URL from .env first"
 npx expo prebuild --platform android --clean # regenerates android/ with the plugin
 cd android && ./gradlew assembleRelease      # -> app/build/outputs/apk/release/app-release.apk
 ```
 
-The build log prints which keystore signed it. The release build reads `.env`, never
-`.env.development`, so it is mainnet by construction.
+The build log prints which keystore signed it. Without the four properties the build
+produces `app-release-unsigned.apk`, which cannot be installed, rather than a
+debug-signed file that could never be updated in place. The release build reads
+`.env`, never `.env.development`, so it is mainnet by construction; a devnet value in
+`.env.local` or exported in the shell would reach it, so keep both clean too.
 
 The repo is an npm-workspaces monorepo:
 
@@ -93,6 +96,14 @@ The repo is an npm-workspaces monorepo:
 - [TASKS.md](./TASKS.md) — agent-executable tasks with acceptance criteria.
 - [DECISIONS.md](./DECISIONS.md) — every non-obvious technical decision, recorded when
   made.
+
+## Not affiliated
+
+Local Books is an independent personal project. It is not affiliated with, endorsed by,
+or sponsored by any employer of its authors, by the issuers of the tokens it supports
+(USDC, USDT), or by the National Bank of Georgia, whose published daily rates it reads
+through a public endpoint. Those names are used descriptively, to say what the app
+reads.
 
 ## License
 

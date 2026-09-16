@@ -8,7 +8,7 @@ Local-first mobile app for freelancers and contractors paid in stablecoins on So
 
 ## Context
 
-- **Team:** solo engineer (React Native / TypeScript / Electron; production experience with client-side cryptography and P2P/local-first systems on the Pear/Bare stack) + co-founder (business finance & project management: report templates, tax logic, pilot recruitment, milestone reporting).
+- **Team:** solo engineer (React Native / TypeScript / Electron; production experience with client-side cryptography and P2P/local-first systems) + co-founder (business finance & project management: report templates, tax logic, pilot recruitment, milestone reporting).
 - **Funding path:** Superteam Agentic Engineering grant (v0.1, this repo) → Solana Foundation instagrant application via Superteam Georgia (full MVP) → larger ecosystem funding later.
 - **Build mode:** part-time (~6–8 h/week), AI-assisted (agentic engineering), built in public.
 - **v0.1 target date: Sunday, September 27, 2026.** (Moved from Sep 13; see DECISIONS.md D0.)
@@ -89,7 +89,7 @@ The real incumbent is a spreadsheet plus a block explorer.
 
 - Event-sourced core: user actions (invoice created, match confirmed, category assigned) are operations in an append-only local op log. Chain-derived data is **not** part of the op log — it is re-derivable from RPC; only human decisions are source-of-truth.
 - Materialized view: operations fold into local SQLite (op-sqlite or expo-sqlite — decision recorded in DECISIONS.md), which serves all queries and reports. SQLite is a disposable index; the op log is the source of truth.
-- **v0.1 ships single-device.** The op-log abstraction exists from day one; replication (device pairing, accountant read-only key, desktop) is post-grant, designed for Autobase/Hyperswarm over the Bare runtime.
+- **v0.1 ships single-device.** The op-log abstraction exists from day one; replication (device pairing, accountant read-only key, desktop) is post-grant, designed around append-only-log replication over a P2P transport.
 - Encrypted at rest.
 
 ### 5. Local AI layer — deferred, strictly optional
