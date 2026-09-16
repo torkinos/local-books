@@ -12,6 +12,7 @@ import {
   RpcHttpError,
   RpcResponseError,
   mainnetEndpoints,
+  devnetEndpoints,
   parseRetryAfterMs,
 } from '../src/adapters/rpc.js';
 
@@ -360,16 +361,22 @@ describe('parseRetryAfterMs (RFC 9110: delta-seconds and HTTP-date forms)', () =
   });
 });
 
-describe('endpoint order (D9)', () => {
-  it('defaults to publicnode primary, mainnet-beta failover', () => {
-    expect(mainnetEndpoints().map((e) => e.endpointLabel)).toEqual(['publicnode', 'mainnet-beta']);
+describe('endpoint order (D9, amended 2026-09-16)', () => {
+  it('mainnet-beta is the only public endpoint: publicnode serves ~2 days of history', () => {
+    expect(mainnetEndpoints().map((e) => e.endpointLabel)).toEqual(['mainnet-beta']);
   });
 
   it('a user-supplied RPC URL goes first', () => {
     expect(mainnetEndpoints('https://my.helius.example').map((e) => e.endpointLabel)).toEqual([
       'user-rpc',
-      'publicnode',
       'mainnet-beta',
+    ]);
+  });
+
+  it('devnet likewise takes a user URL first', () => {
+    expect(devnetEndpoints('https://my.devnet.example').map((e) => e.endpointLabel)).toEqual([
+      'user-rpc',
+      'devnet',
     ]);
   });
 });

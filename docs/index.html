@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local Books — private income books for people paid in crypto</title>
+  <meta name="description" content="Local-first Android app for freelancers paid in stablecoins on Solana. Invoices with a Solana Pay QR, automatic payment matching, valuation at the official daily rate, CSV export. Watch-only, no backend, no telemetry.">
+  <!-- No analytics, no fonts, no external resources of any kind (DECISIONS.md D5). -->
+  <style>
+    :root {
+      --ink: #1b1b22;
+      --muted: #5c5c6b;
+      --line: #e2e2ea;
+      --accent: #1f4e9c;
+      --accent-ink: #ffffff;
+      --bg: #fafafc;
+      --card: #ffffff;
+      --warn-bg: #fff7e6;
+      --warn-ink: #8a5a00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #ececf2;
+        --muted: #a7a7b6;
+        --line: #2c2c36;
+        --accent: #7aa2ea;
+        --accent-ink: #0d1424;
+        --bg: #121218;
+        --card: #1a1a22;
+        --warn-bg: #2a2211;
+        --warn-ink: #e6c37a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding-block: 0 48px;
+      padding-inline: 20px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    main { max-width: 820px; margin: 0 auto; }
+    header { padding-block: 56px 24px; }
+    h1 { font-size: 2rem; line-height: 1.15; margin: 0 0 12px; }
+    .tagline { font-size: 1.2rem; color: var(--muted); margin: 0 0 24px; max-width: 40rem; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .button {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--accent-ink);
+      text-decoration: none;
+      font-weight: 600;
+      padding: 12px 18px;
+      border-radius: 10px;
+    }
+    .button.secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .fine { color: var(--muted); font-size: 0.9rem; margin: 10px 0 0; }
+    .shot {
+      margin: 32px 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      padding: 16px;
+      text-align: center;
+    }
+    .shot img { max-width: 320px; width: 100%; height: auto; border-radius: 10px; }
+    .shot figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+    h2 { font-size: 1.25rem; margin: 36px 0 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .card h3 { margin: 0 0 6px; font-size: 1rem; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    .never { background: var(--warn-bg); color: var(--warn-ink); border-radius: 12px; padding: 14px 16px; }
+    .never ul { margin: 6px 0 0; padding-left: 20px; }
+    ol.loop { padding-left: 22px; }
+    ol.loop li { margin: 6px 0; }
+    footer { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; color: var(--muted); font-size: 0.9rem; }
+    a { color: var(--accent); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Local Books</h1>
+    <p class="tagline">Private income books for freelancers paid in stablecoins on Solana. The spreadsheet replacement, not a tax calculator.</p>
+    <div class="cta">
+      <a class="button" href="https://github.com/torkinos/local-books/releases/latest">Download the Android APK</a>
+      <a class="button secondary" href="https://github.com/torkinos/local-books">Source on GitHub</a>
+    </div>
+    <p class="fine">v0.1 · Android · free and open source (MIT) · no account, no sign-in.</p>
+  </header>
+
+  <figure class="shot">
+    <!-- Session 5: drop a real phone screenshot at docs/screenshot.png (ledger with a few rows). -->
+    <img src="screenshot.png" alt="Local Books ledger screen on Android: watched address, incoming USDC payments, and an invoice marked paid by reference." width="320" height="693">
+    <figcaption>The ledger: every payment into your address, and the invoice it settled.</figcaption>
+  </figure>
+
+  <h2>The whole loop, on one phone</h2>
+  <ol class="loop">
+    <li><strong>Watch</strong> your Solana address. The app pulls its payment history from public RPC and keeps it up to date while open.</li>
+    <li><strong>Invoice</strong> a client: line items, USDC or USDT, due date. Share it as a PDF with a Solana Pay QR code.</li>
+    <li><strong>Get paid.</strong> The client scans the QR and pays the exact amount. The next time the app checks, the payment is matched to the invoice by itself.</li>
+    <li><strong>Report.</strong> Every receipt is valued in GEL at the National Bank of Georgia's official rate for that day. Monthly income per client, and a CSV your accountant can verify line by line.</li>
+  </ol>
+
+  <h2>Three things it will never do</h2>
+  <div class="never">
+    <ul>
+      <li><strong>Hold keys.</strong> Watch-only forever. It never signs or sends anything.</li>
+      <li><strong>Talk to our servers.</strong> There are none. No backend, no accounts, no telemetry. The only network traffic is Solana RPC and the NBG rate endpoint.</li>
+      <li><strong>Promise real-time.</strong> It checks when you open the app, and while it is open.</li>
+    </ul>
+  </div>
+
+  <h2>What is in v0.1</h2>
+  <div class="grid">
+    <div class="card"><h3>Encrypted on the phone</h3><p>Your books live in an SQLCipher database keyed from the device keystore. Nothing leaves the phone unless you export it.</p></div>
+    <div class="card"><h3>Reference matching</h3><p>Payments made through the QR carry the invoice reference and match automatically. Plain transfers show up in the ledger for you to decide on.</p></div>
+    <div class="card"><h3>Defensible valuation</h3><p>Each row records the rate, its source, and its date. Receipt days follow the Georgian calendar, the same one the rates use.</p></div>
+    <div class="card"><h3>Honest sync</h3><p>Progress is shown as real counts, never an invented percentage. Rate limits and outages say what happens next.</p></div>
+  </div>
+
+  <h2>Known limitations</h2>
+  <p>USDC and USDT income only, valued in GEL. No background sync while the app is closed. Your books are tied to this phone's keystore, so keep the CSV export as your portable record. The full list is in the <a href="https://github.com/torkinos/local-books/releases/latest">release notes</a>.</p>
+
+  <h2>See it work</h2>
+  <p id="video">Demo video: coming with the v0.1 release.</p>
+
+  <footer>
+    Built in public for the Superteam Agentic Engineering grant, 2026. Decisions, plan, and every trade-off are in the repository.
+  </footer>
+</main>
+</body>
+</html>

@@ -265,6 +265,25 @@ driver's `pauseMs` (D8) stays the only throttle.
 Revisit only if the on-device re-run of the S1 harness (W2 device pass) contradicts the
 datacenter-measured numbers.
 
+> **2026-09-16 (amended): publicnode removed; mainnet-beta is the only public
+> endpoint.** While picking a mainnet address for the landing-page screenshot,
+> publicnode returned 2 signatures for a wallet that mainnet-beta shows with 1000+
+> going back to August, its "next page" was empty, and `getTransaction` for the
+> August transaction returned null. In August (S1) the same endpoint served 10,000
+> signatures. Whatever changed on their side, an endpoint whose history depth can
+> silently shrink cannot be allowed to START a backfill: the driver reads the empty
+> page as "history exhausted" (D8) and durably marks the books complete with
+> everything older missing — no error, no banner, just wrong income. Nor is it safe
+> as a failover, because a first sync during a mainnet-beta outage would start on
+> it. The order is now `user RPC (when set) → mainnet-beta`. Cost: S1's ~0.6 tx/s
+> with a 429 every ~10 calls, so a 2,000-transaction wallet backfills in ~55 min
+> instead of ~7, once, with progress shown; the personal RPC URL (D18) is the
+> remedy for heavy wallets. Found before v0.1.0 was promoted from pre-release; the
+> APK is rebuilt (versionCode 2). The general lesson is recorded for later: a
+> "history exhausted" verdict is only as good as the endpoint's retention, and a
+> future multi-endpoint setup should confirm exhaustion on a second endpoint before
+> checkpointing it.
+
 ## D10 — Event identity is endpoint-stable and per-watched-address
 
 **Date:** 2026-08-23 · **Status:** accepted — from adversarial review of the normalizer

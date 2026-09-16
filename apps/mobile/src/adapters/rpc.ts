@@ -9,9 +9,10 @@
  *   - 429s surface as RateLimitedError with the server's Retry-After when present;
  *     the core backfill driver owns pacing and failover (D8/D9), never this adapter.
  *   - getTransactions fetches SEQUENTIALLY, one request per signature. No JSON-RPC
- *     batch arrays: publicnode rejects them outright and mainnet-beta rate-limits
- *     them above ~10 (S1, D9). A null result (this node does not serve that
- *     transaction) is OMITTED, never wrapped as fetched -- see the method.
+ *     batch arrays: mainnet-beta rate-limits them above ~10 and publicnode (no
+ *     longer used, see mainnetEndpoints) rejected them outright (S1, D9). A null
+ *     result (this node does not serve that transaction) is OMITTED, never wrapped
+ *     as fetched -- see the method.
  *   - An empty signature page mid-backfill is only reported after the endpoint
  *     confirms it knows the paging cursor AND the empty page reproduces on a second
  *     ask -- an empty page durably ends the backfill, and a backend that merely
@@ -37,15 +38,21 @@ export interface JsonRpcAdapterOptions {
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 /**
- * Endpoint order is a D9 decision, not a preference: publicnode primary,
- * mainnet-beta failover. A user-supplied URL (PROJECT.md line 72) goes FIRST --
- * someone who pasted their own Helius key chose to be on it.
+ * Endpoint order is a D9 decision, not a preference. A user-supplied URL
+ * (PROJECT.md line 72) goes FIRST -- someone who configured their own Helius key
+ * chose to be on it. The only public endpoint is mainnet-beta.
+ *
+ * publicnode was the primary until 2026-09-16 (D9 amendment): it serves ~5 tx/s,
+ * but it was found serving only the last ~2 days of history -- two signatures for
+ * a wallet mainnet-beta shows with 1000+ since August, and `getTransaction` null
+ * for the older ones. An endpoint like that cannot START a backfill: the driver
+ * reads its empty second page as "history exhausted" and durably marks the books
+ * complete with everything older silently missing. It is not kept as a failover
+ * either -- a first sync that happens while mainnet-beta is down would start on it
+ * and inherit the same hole. Slow and complete beats fast and wrong.
  */
 export function mainnetEndpoints(userRpcUrl?: string): readonly JsonRpcAdapter[] {
-  const defaults = [
-    new JsonRpcAdapter('https://solana-rpc.publicnode.com', 'publicnode'),
-    new JsonRpcAdapter('https://api.mainnet-beta.solana.com', 'mainnet-beta'),
-  ];
+  const defaults = [new JsonRpcAdapter('https://api.mainnet-beta.solana.com', 'mainnet-beta')];
   return userRpcUrl ? [new JsonRpcAdapter(userRpcUrl, 'user-rpc'), ...defaults] : defaults;
 }
 
