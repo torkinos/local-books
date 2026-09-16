@@ -12,7 +12,7 @@
     ],
     "android": {
       "package": "com.localbooks.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "edgeToEdgeEnabled": true
     },
     "ios": {

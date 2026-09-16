@@ -27,11 +27,11 @@ five sessions; everything not listed here is either done, mine to do in the sand
    T6, T15, T16, T19, T20, T22, T25, T26, T28, T29 on the device side. Skipped on
    purpose: the `sqlite3`-can't-open check, the S1 phone re-run and airplane-mode
    test, sharing to WhatsApp *and* email (any one share is enough).
-2. **Release APK, locally (~20 min, no EAS).** One keystore, one Gradle command
+2. **DONE 2026-09-16.** ~~Release APK, locally (~20 min, no EAS).~~ One keystore, one Gradle command
    (`cd apps/mobile/android && ./gradlew assembleRelease`), upload the APK to a
    GitHub Release. I write the signing steps and release notes; the default icon
    ships if nobody has time for a better one.
-3. **Clean-install check (~10 min).** Uninstall the dev build, install that APK from
+3. **DONE 2026-09-16.** ~~Clean-install check (~10 min).~~ Uninstall the dev build, install that APK from
    the Release page, watch one address, see one payment. That is T30 and T33's
    "installs on a clean device".
 4. **Repo public + landing page (~5 min).** Flip the repo to public and enable GitHub
@@ -277,15 +277,15 @@ Add address → pay with a Solana Pay transfer request → detected → matched 
 > `.env`, which release builds also read). S2's runbook
 > (`spikes/02-reference-detection.md`) is the script for this capture.
 
-### `[~]` T17 · EAS build → GitHub Release APK `[M2]`
+### `[x]` T17 · EAS build → GitHub Release APK `[M2]`
 > **2026-09-15:** no EAS — local Gradle instead. `apps/mobile/plugins/withReleaseSigning.js`
 > (Expo config plugin, applied at prebuild) adds a `release` signing config that reads
 > the keystore + passwords from `~/.gradle/gradle.properties`, and the release build
 > type uses it when present (the build log says which key signed). Patch verified
 > idempotent against the generated build.gradle. `android.versionCode` pinned in
 > app.json. Release notes drafted at `docs/releases/v0.1.0.md`; README has the
-> keystore + build steps. **Remaining on the Mac:** keytool once, prebuild --clean,
-> `./gradlew assembleRelease`, `gh release create v0.1.0 --prerelease …`.
+> keystore + build steps. **2026-09-16: done** — keystore created, release APK built
+> and signed with it, published as pre-release `v0.1.0`.
 Configure EAS, produce a signed APK, publish as a GitHub Release.
 **Accept:** the APK downloads from the Release page and installs on a **clean** device
 that has never had a dev build. Ships in W2 deliberately — five weeks before it is due,
@@ -440,7 +440,7 @@ post-grant list. Nothing is left half-built in the tree.
 
 > **Wed Sep 16 — FEATURE FREEZE.** Nothing new after this, including "small" things.
 
-### `[~]` T28 · Empty states + error copy
+### `[x]` T28 · Empty states + error copy
 Every screen has a first-run state; RPC failures say what to do next.
 **Accept:** a fresh install with no addresses is comprehensible without a tutorial.
 > **2026-09-14:** code half done. Every screen already had a first-run state; added
@@ -452,7 +452,7 @@ Every screen has a first-run state; RPC failures say what to do next.
 > `address-unwatched`; in-flight sync cancelled). **Remaining on device:** the
 > fresh-install walk-through itself.
 
-### `[~]` T29 · Backfill progress + honest sync framing
+### `[x]` T29 · Backfill progress + honest sync framing
 Per PROJECT.md line 62: "checks when you open the app, and while it is open."
 **Never** promise real-time.
 **Accept:** the copy makes no real-time claim anywhere; progress is visible during a long
@@ -464,7 +464,7 @@ backfill.
 > ("Backfilling token-account history — …", D19). **Remaining on device:** watch a
 > long backfill once and confirm the counts read sensibly.
 
-### `[ ]` T30 · Device pass on a clean install
+### `[x]` T30 · Device pass on a clean install
 **Accept:** install the Release APK on a device that has never run a dev build; complete
 the full loop; log every rough edge as a fix-or-cut decision.
 
@@ -482,7 +482,16 @@ Cut from footage captured in T16 and T22 — do not re-shoot from scratch.
 **Accept:** ≤ 3 minutes, shows the whole loop (invoice → share → pay → match → report),
 published and linked from the landing page and README.
 
-### `[ ]` T33 · Release build + GitHub Release `[M2]`
+### `[~]` T33 · Release build + GitHub Release `[M2]`
+> **2026-09-16:** `v0.1.0` published as a **pre-release** with the release-signed
+> APK and `docs/releases/v0.1.0.md` as notes; clean-install check passed on the
+> phone (T30). Remaining: paste the demo video link into the notes and promote the
+> same release from pre-release to release in session 5.
+> **2026-09-16, later:** the pre-release APK must be REBUILT before promotion —
+> publicnode (the D9 primary) was found serving only ~2 days of mainnet history,
+> which would have silently truncated every user's books; mainnet-beta is now the
+> only public endpoint (D9 amended), `versionCode` bumped to 2. Rebuild with the
+> same three commands and `gh release upload v0.1.0 <apk> --clobber`.
 Signed APK, release notes, known limitations stated plainly.
 **Accept:** downloads and installs from a logged-out browser on a clean device; the loop
 works; release notes name the deferred items so expectations are set.

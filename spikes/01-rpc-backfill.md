@@ -1,6 +1,9 @@
 # S1 — Spike: public-RPC backfill + rate limits
 
 **Date:** 2026-08-23 · **Verdict: GO**, with a mandated endpoint order (see below).
+> **2026-09-16:** the endpoint order below is superseded — publicnode was found
+> serving only ~2 days of history (DECISIONS.md D9 amendment); mainnet-beta is now
+> the sole public endpoint. The throughput numbers stand as measured.
 **Harness:** `spikes/01-rpc-backfill/` — runs the *real* `packages/core` backfill driver
 (compiled, unmodified) against live endpoints through a fetch-based `RpcPort` adapter,
 the same shape T9 will ship. Raw metrics in `spikes/01-rpc-backfill/raw/` (gitignored).
