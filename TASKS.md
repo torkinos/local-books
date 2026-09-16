@@ -492,6 +492,15 @@ published and linked from the landing page and README.
 > which would have silently truncated every user's books; mainnet-beta is now the
 > only public endpoint (D9 amended), `versionCode` bumped to 2. Rebuild with the
 > same three commands and `gh release upload v0.1.0 <apk> --clobber`.
+> **2026-09-17 (PR #1 review fixes, also in the rebuild):** the add screen refuses
+> token-account/off-curve addresses (watching a wallet plus its USDC account double-
+> counted income; D19 note) with a statement-level backstop in core; Android backups
+> are off (`allowBackup: false`, D12 amendment — a restore could only ever lock the
+> books); the signing plugin now emits an UNSIGNED apk instead of a debug-signed one
+> when the keystore properties are missing; the README's keyed-URL check works on
+> macOS grep. Still open from the review (Low): user-RPC field validation, non-JSON
+> 200 bodies bypassing failover, undated payments missing from the statement, a
+> duplicate invoice after a refresh failure, cache cleanup of shared PDFs/CSVs.
 Signed APK, release notes, known limitations stated plainly.
 **Accept:** downloads and installs from a logged-out browser on a clean device; the loop
 works; release notes name the deferred items so expectations are set.

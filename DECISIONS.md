@@ -373,6 +373,15 @@ it, written only after the encrypted DB first opens successfully. On launch:
   explicitly deleting the old database; the app never does it on its own;
 - key + marker with a different fingerprint → `KeyLostError('mismatch')`, same rule.
 
+> **2026-09-17 (amended, PR #1 review):** `android.allowBackup` is now `false`.
+> Expo defaulted it to true, so the encrypted DB and the meta DB were being backed
+> up while the Keystore key never can be — every restore (new phone, device
+> transfer, and per Android's own docs even a reinstall) could only ever end in the
+> KeyLostError below. A backup that can never be opened is pure downside, so the
+> books are not backed up at all; the exported CSV is the portable record. The
+> claim two lines down that `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` keeps the entry
+> out of backups is iOS-only; on Android the guarantee comes from the Keystore.
+
 The key is stored `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` — background sync works after
 boot, and the entry never migrates in a backup, which makes the restore behaviour
 deterministic (the marker catches it) instead of platform-dependent. `isSQLCipher()`
@@ -638,6 +647,15 @@ watched wallet, only the first — the one whose ATA-create instruction names th
 wallet — was visible to owner-only paging; the other three named the token account
 alone and were found through the derived ATA. Solflare paid into the associated
 account every time. Pinned in `packages/core/test/s2-devnet.test.ts`.
+
+**2026-09-17 (PR #1 review):** the add screen now refuses off-curve keys — token
+accounts, vaults, programs — with copy that points at the owning wallet. Watching a
+wallet AND its own token account stored every payment twice (an `in` under each,
+and the statement dedups per watched address) and made the matcher refuse the
+clean payment as ambiguous. `buildIncomeStatement` additionally collapses incoming
+rows that share an `eventKey`, so one movement is summed once whatever reaches
+the books. Multisig vaults are off-curve too and stay out; their ingestion is
+post-grant.
 
 **Revisit if:** a wallet app is seen paying into a non-associated token account
 (then enumeration is needed after all), or token-2022 stablecoins arrive.

@@ -133,6 +133,12 @@ export function buildIncomeStatement(
   const calendarOffsetSeconds = options.calendarOffsetSeconds ?? 0;
 
   let internal = 0;
+  // One instruction has one destination, so two INCOMING rows sharing an eventKey
+  // can only be the same money seen from two watched addresses -- a wallet and its
+  // own token account both on the watch list. The add screen refuses token-account
+  // addresses; this is the money-side guarantee that a payment is summed once even
+  // if such a pair reaches the books some other way (D19).
+  const counted = new Set<string>();
   const inPeriod = rows.filter((row) => {
     const t = row.event.blockTime;
     const counts =
@@ -142,6 +148,9 @@ export function buildIncomeStatement(
       t < periodEnd &&
       row.event.direction === 'in';
     if (!counts) return false;
+    const key = eventKey(row.event);
+    if (counted.has(key)) return false;
+    counted.add(key);
     if (row.event.counterparty !== null && own.has(row.event.counterparty)) {
       internal += 1;
       return false;

@@ -13,6 +13,7 @@
     "android": {
       "package": "com.localbooks.app",
       "versionCode": 2,
+      "allowBackup": false,
       "edgeToEdgeEnabled": true
     },
     "ios": {

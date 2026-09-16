@@ -47,6 +47,17 @@ describe('validateAddress', () => {
     expect(result.ok).toBe(false);
     expect(!result.ok && result.reason).toMatch(/32 bytes/);
   });
+
+  it('rejects a token account (off-curve) and points at the wallet that owns it', () => {
+    // 9WzD…'s real mainnet USDC associated token account (pinned in wallet.test.ts).
+    // Watching it next to the wallet would book every payment twice.
+    const result = validateAddress('FGETo8T8wMcN2wCjav8VK6eh3dLk63evNDPxzLSJra8B');
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toMatch(/token account/);
+    expect(!result.ok && result.reason).toMatch(/wallet that owns it/);
+    // The owning wallet itself is on-curve and accepted.
+    expect(validateAddress('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM').ok).toBe(true);
+  });
 });
 
 describe('formatTokenAmount', () => {

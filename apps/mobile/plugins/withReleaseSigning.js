@@ -15,10 +15,13 @@
  *   LOCAL_BOOKS_RELEASE_KEY_ALIAS=localbooks
  *   LOCAL_BOOKS_RELEASE_KEY_PASSWORD=...
  *
- * Without them the release build type silently falls back to the debug key -- fine
- * for a local smoke test, never for a GitHub Release (a debug-signed APK cannot be
- * updated in place by a properly signed one, and Android flags it). The build log
- * prints which key was used (see the `println` below) so this is never a surprise.
+ * Without them the release build type has NO signing config: Gradle emits
+ * `app-release-unsigned.apk`, which cannot be installed and says why in its name. A
+ * debug-signed "release" would install fine and could never be updated in place by
+ * the real key -- and in this app the uninstall that fixes that deletes the
+ * encrypted books -- so the fallback is loud on purpose. A local smoke build may
+ * opt back into the debug key with `-PLOCAL_BOOKS_ALLOW_DEBUG_SIGNED_RELEASE=true`.
+ * The build log prints which key was used (see the `println` below).
  *
  * Plain CommonJS on purpose: Expo loads config plugins with require() at prebuild
  * time, outside Metro and outside the TypeScript build.
@@ -39,10 +42,18 @@ const RELEASE_SIGNING_CONFIG = `        release {
         }
 `;
 
-const RELEASE_SIGNING_CONFIG_USE = `            signingConfig project.hasProperty('${MARKER}') ? signingConfigs.release : signingConfigs.debug
+const ALLOW_DEBUG = 'LOCAL_BOOKS_ALLOW_DEBUG_SIGNED_RELEASE';
+
+// Parenthesised on purpose: Groovy ends a statement at a newline unless the
+// expression is visibly open, so a bare multi-line ternary would not parse.
+const RELEASE_SIGNING_CONFIG_USE = `            signingConfig = (project.hasProperty('${MARKER}')
+                ? signingConfigs.release
+                : (project.hasProperty('${ALLOW_DEBUG}') ? signingConfigs.debug : null))
             println(project.hasProperty('${MARKER}')
                 ? "Local Books: release build signed with the RELEASE keystore"
-                : "Local Books: release build signed with the DEBUG keystore (no ${MARKER} in gradle.properties)")`;
+                : (project.hasProperty('${ALLOW_DEBUG}')
+                    ? "Local Books: release build signed with the DEBUG keystore (${ALLOW_DEBUG} set) -- never publish this APK"
+                    : "Local Books: NO release keystore (${MARKER} missing from gradle.properties) -- producing app-release-unsigned.apk, which cannot be installed"))`;
 
 /**
  * Pure, idempotent text patch so it can be unit-tested without Expo. Throws when

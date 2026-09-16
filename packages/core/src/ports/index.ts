@@ -234,7 +234,8 @@ export interface ReferenceKeyPort {
 // ---------------------------------------------------------------------------
 
 /**
- * Multi-device replication. Post-grant, over Autobase/Hyperswarm on Bare.
+ * Multi-device replication. Post-grant, over a P2P transport with append-only-log
+ * replication.
  *
  * Present so the op log is written against a replication-shaped interface from day
  * one; v0.1 ships single-device and nothing implements this.

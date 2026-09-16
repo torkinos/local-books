@@ -142,8 +142,7 @@ function BootFailure({
         <Text style={styles.errorHint} testID="key-lost-hint">
           To start fresh: Android Settings › Apps › Local Books › Storage › Clear data.
           This deletes the unreadable books, invoices included, and the next launch
-          creates new ones. If you have a backup of this phone with the key still on
-          it, restore that instead.
+          creates new ones. Your exported CSV files are unaffected.
         </Text>
       ) : (
         <Pressable style={styles.retryButton} onPress={onRetry} testID="boot-retry">
