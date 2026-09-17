@@ -46,6 +46,9 @@ npm install
 npm run check   # typecheck + lint + tests
 ```
 
+`npm audit` reports findings in the Expo CLI and Vitest toolchains. None of those
+packages is bundled into the APK — they are build-time only.
+
 The app is built for **mainnet** by default. For the devnet demo path, put
 `EXPO_PUBLIC_NETWORK=devnet` in `apps/mobile/.env.development` (debug builds only;
 a release build never reads it). A personal RPC endpoint goes in `apps/mobile/.env`
