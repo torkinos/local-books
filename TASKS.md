@@ -49,7 +49,9 @@ thread draft), or cut.
    git grep TODO_VIDEO_URL   # must print nothing
    ```
 
-   Then `npm run check`, commit, push, and
+   Then `npm run check`, commit, push, **and merge develop → master** — Pages serves
+   `master:/docs`, and the ship-tidy commit `ecb2ede` went to develop, so master is a
+   commit behind and would publish the old landing page. Finally
    `gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md` so the Release page
    carries the link too. T32.
 5. **Public + Pages + promote (~15 min).** Do this last: it is the step that is

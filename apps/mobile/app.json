@@ -12,9 +12,13 @@
     ],
     "android": {
       "package": "com.localbooks.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.localbooks.app",
@@ -23,6 +27,9 @@
     "plugins": [
       "expo-sharing",
       "./plugins/withReleaseSigning.js"
-    ]
+    ],
+    "updates": {
+      "enabled": false
+    }
   }
 }

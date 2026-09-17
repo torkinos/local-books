@@ -82,7 +82,7 @@ export function internalNote(internalCount: number): string | null {
   return `${moves} between your own wallets excluded — moving your own money is not income.`;
 }
 
-/** 'local-books-income-2026-01-15.csv' -- UTC date, same calendar as the CSV rows. */
+/** 'local-books-income-2026-01-15.csv' -- UTC export date; rows use the Georgian day. */
 export function csvFilename(now: UnixSeconds): string {
   return `local-books-income-${isoDate(now)}.csv`;
 }
