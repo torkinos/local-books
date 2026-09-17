@@ -50,14 +50,14 @@ thread draft), or cut.
    ```
 
    Then `npm run check`, commit, push, **and merge develop → master** — Pages serves
-   `master:/docs`, and the ship-tidy commit `ecb2ede` went to develop, so master is a
+   `master:/docs`, and the ship-tidy commit `8eff3d2` went to develop, so master is a
    commit behind and would publish the old landing page. Finally
    `gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md` so the Release page
    carries the link too. T32.
 5. **Public + Pages + promote (~15 min).** Do this last: it is the step that is
    outward-facing. Flip the repo public and verify logged out. Settings → Pages →
    branch `master`, folder `/docs`. **Retag first:** `v0.1.0` still points at
-   `6e06fec` (Aug 14) — master's stale HEAD when the release was cut, so the Release's
+   `49b58a6` (Aug 14) — master's stale HEAD when the release was cut, so the Release's
    source archives are August code. Your local `master` branch has not been checked out
    since the merge and still sits on that same commit, so tag from the remote, not from
    it:
@@ -65,7 +65,7 @@ thread draft), or cut.
    ```sh
    git fetch origin
    git tag -f v0.1.0 origin/master && git push -f origin v0.1.0
-   git log -1 --format='%h %s' v0.1.0   # must print the merge commit, not 6e06fec
+   git log -1 --format='%h %s' v0.1.0   # must print the merge commit, not 49b58a6
    ```
 
    Confirm the attached APK is the ~89 MB rebuild (not the publicnode one), then
@@ -121,7 +121,7 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > `node-version-file: .nvmrc`, develop added to the push triggers, `engines.node`
 > and the README now say 24. Remaining: push develop, watch it go green, merge to
 > master, enable branch protection.
-> **2026-09-16:** develop pushed and green, PR #1 merged to master (`0a7c212`), so the
+> **2026-09-16:** develop pushed and green, PR #1 merged to master (`1a0e545`), so the
 > workflow now runs on both branches. Remaining: branch protection on master, which is
 > a Settings click in session 5.
 
@@ -561,7 +561,7 @@ published and linked from the landing page and README.
 > its JS bundle has zero `publicnode` hits, carries `api.mainnet-beta.solana.com`,
 > `versionCode: 2`, and an APK Signing Block (so it is release-signed, not unsigned or
 > debug-signed). Confirm the *uploaded* asset is that ~89 MB file. Also open: the
-> `v0.1.0` **tag points at `6e06fec` "Delete grant-upload directory" (Aug 14)** —
+> `v0.1.0` **tag points at `49b58a6` "Delete grant-upload directory" (Aug 14)** —
 > master's HEAD before PR #1 — so the Release's source archives are the August tree.
 > Retag at master and force-push before promoting (session 5).
 Signed APK, release notes, known limitations stated plainly.
