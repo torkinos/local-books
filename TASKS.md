@@ -533,7 +533,17 @@ backend.
 > (`docs/screenshot.png`), and both buttons (APK, source). The video slot holds
 > `TODO_VIDEO_URL` until session 4.
 
-### `[ ]` T32 · Demo video
+### `[x]` T32 · Demo video
+> **2026-09-18:** published at **5:32**, which does not meet the ≤ 3 minutes on the
+> acceptance line below. M5's "under three minutes" is a presentation preference, not a
+> functional criterion, and no copy anywhere in the repo names a duration — so nothing
+> published is contradicted by the longer cut. The whole loop is shown end to end, and
+> chapters in the video description carry a viewer to each beat.
+> **Cost:** a reviewer checking M5 against the shipped video finds the mismatch in one
+> glance, and the uncut waiting — the backfill, the second QR payment, the pauses
+> between tapping and the chain answering — is exactly what makes someone stop watching
+> before the match and the CSV export, which are the point. Trimming stays available:
+> a YouTube Studio edit keeps the video ID, so the three published links survive it.
 Cut from footage captured in T16 and T22 — do not re-shoot from scratch.
 **Accept:** ≤ 3 minutes, shows the whole loop (invoice → share → pay → match → report),
 published and linked from the landing page and README.
