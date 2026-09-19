@@ -52,31 +52,19 @@ thread** — roughly fifteen minutes, eight days before the Sep 27 deadline.
    not the commit has landed. Push anyway, and push first — Pages serves `master:/docs`,
    so until you do, the live landing page still points at the 5:32 video.
 
-5. **MOSTLY DONE 2026-09-19 — one command left.** ~~Public + Pages + retag~~ + promote.
-   Verified from outside today: the repo is **public** (API and HTML both 200,
-   `private: false`, MIT detected), **Pages is live** and serving current `master:/docs`,
-   the tag has moved off the August commit, and the **published APK is byte-identical**
-   (one SHA-256, `f7d84e15…`) to the corrected local build — versionCode 3,
-   release-signed, mainnet-beta, zero publicnode. Nothing needs re-uploading.
+5. **DONE 2026-09-19, except one toggle.** ~~Public + Pages + retag + promote.~~
+   All verified from outside: repo **public**, **Pages live** and serving the 2:46 video,
+   release **promoted** (`prerelease: false`) with notes carrying the new link,
+   `/releases/latest` resolving to `/tag/v0.1.0` so the Download CTA works, the APK
+   byte-identical to the corrected build, and CI green on `93b807d`.
 
-   **What is left is not cosmetic.** `v0.1.0` is still flagged **pre-release**, and
-   GitHub excludes pre-releases from `/releases/latest` — that URL 404s in the API and
-   redirects browsers to the bare releases index. It is the **Download the APK** target
-   on both the live landing page and the README, so right now every visitor who clicks
-   the main CTA lands somewhere other than the release. Promoting fixes both links and
-   attaches the video-bearing notes in the same command:
-
-   ```sh
-   gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md --prerelease=false
-   curl -sI https://github.com/torkinos/local-books/releases/latest | head -1  # expect 302 → /tag/v0.1.0
-   ```
-
-   Then **branch protection** on master (Settings → Branches): `protected: false` today,
-   so a red build does not block, which is the unmet half of T4's acceptance. Optional
-   while you are there: the tag sits one docs-only commit behind master, so
-   `git tag -f v0.1.0 origin/master && git push -f origin v0.1.0` if you want the
-   source archives to match HEAD exactly. T1, T21, T31, T34 are closed; T4 and T33
-   close on these two clicks.
+   **Branch protection landed 2026-09-19** (`protected: true`, required check `check`),
+   which closes T4 and with it every repo-side task. Note the trade it brings: master no
+   longer accepts a direct push, so even a one-line docs fix goes branch → CI → merge.
+   Optional leftovers: `v0.1.0` is three commits
+   behind master and its source archives still carry the old video link, so
+   `git tag -f v0.1.0 origin/master && git push --force-with-lease origin v0.1.0` if you want them to
+   match. T1, T21, T31, T33, T34 are closed.
 
 6. **Thread (~10 min).** `grant-upload/thread-v0.1.md` now has its three links filled
    in — Release, site, video — so it is ready to post as written. It stays gitignored,
@@ -122,7 +110,7 @@ Vitest for core. ESLint config banning `react*`, `react-native*`, `expo*`,
 `import 'react-native'` to a core file **fails lint** — demonstrated once and the output
 pasted into the PR. A guard nobody has watched fail is not known to work.
 
-### `[~]` T4 · CI
+### `[x]` T4 · CI
 GitHub Actions: install, typecheck, lint, test on push and PR.
 **Accept:** a red build blocks; badge in README.
 > **2026-08-23:** `.github/workflows/ci.yml` written (typecheck, lint, purity-guard
@@ -142,6 +130,20 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > Only half the acceptance line is met: the badge is in the README and the workflow
 > runs, but `branches/master` still reports `protected: false`, so a red build does
 > not yet block. That single Settings toggle is all that is left of T4.
+> **2026-09-19, closed.** Classic branch protection is on `master` — verified from
+> outside, `branches/master` now reports `protected: true` (the rulesets API still
+> returns `[]`, which is expected: classic rules are not surfaced there). The required
+> status check is the `check` job from `ci.yml`; the `build`/`deploy`/
+> `report-build-status` names that appear alongside it belong to the Pages deployment
+> workflow and were deliberately not required. Both halves of the acceptance line are
+> now met: the badge is in the README and a red build blocks.
+> **Consequence, effective immediately:** direct `git push origin master` is refused —
+> commits must reach master through a branch whose `check` run has passed.
+> **2026-09-19, still open — checked twice.** `branches/master` reports
+> `protected: false` and `rules/branches/master` returns `[]`, so there is neither a
+> classic protection rule nor a ruleset. CI is green on `93b807d` (HEAD), so the only
+> thing missing is the toggle that makes a red run *block*. This is the last repo-side
+> task in the window.
 
 ### `[x]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
@@ -594,7 +596,7 @@ Cut from footage captured in T16 and T22 — do not re-shoot from scratch.
 **Accept:** ≤ 3 minutes, shows the whole loop (invoice → share → pay → match → report),
 published and linked from the landing page and README.
 
-### `[~]` T33 · Release build + GitHub Release `[M2]`
+### `[x]` T33 · Release build + GitHub Release `[M2]`
 > **2026-09-16:** `v0.1.0` published as a **pre-release** with the release-signed
 > APK and `docs/releases/v0.1.0.md` as notes; clean-install check passed on the
 > phone (T30). Remaining: paste the demo video link into the notes and promote the
@@ -639,6 +641,16 @@ published and linked from the landing page and README.
 > gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md --prerelease=false
 > curl -sI https://github.com/torkinos/local-books/releases/latest | head -1  # expect 302 → /tag/v0.1.0
 > ```
+> **2026-09-19, closed — verified live.** The release is promoted (`prerelease: false`,
+> `draft: false`), its notes carry the 2:46 video and still name the deferred items, and
+> `/releases/latest` resolves again: 200 from the API, and the browser URL lands on
+> `/tag/v0.1.0`. So the **Download the APK** CTA works on both the landing page and the
+> README. The attached APK is untouched at 92,940,910 B. Acceptance met in full.
+> **One loose thread, cosmetic but real:** `v0.1.0` now sits **three commits behind
+> master**, and the tagged tree predates the video swap — so the Release's *Source code*
+> archives still contain the old `yLAAbZGteow` link in README, `docs/index.html` and the
+> release notes. If that upload gets deleted, those archives carry a dead link. Fix, if
+> you want it: `git tag -f v0.1.0 origin/master && git push --force-with-lease origin v0.1.0`.
 Signed APK, release notes, known limitations stated plainly.
 **Accept:** downloads and installs from a logged-out browser on a clean device; the loop
 works; release notes name the deferred items so expectations are set.
