@@ -66,10 +66,10 @@ thread** — roughly fifteen minutes, eight days before the Sep 27 deadline.
    `git tag -f v0.1.0 origin/master && git push --force-with-lease origin v0.1.0` if you want them to
    match. T1, T21, T31, T33, T34 are closed.
 
-6. **Thread (~10 min).** `grant-upload/thread-v0.1.md` now has its three links filled
-   in — Release, site, video — so it is ready to post as written. It stays gitignored,
-   on the Mac, out of the public repo. Post 4 (the token-account finding) is the one to
-   keep if you cut it short. T35.
+6. **CUT 2026-09-19.** ~~Thread (~10 min).~~ Withdrawn, not postponed — see D24 and T35.
+   The draft stays on the Mac at `grant-upload/thread-v0.1.md` with its links filled, so
+   posting it later costs only a trim pass: every one of its seven posts is over X's
+   280-character limit (post 2 by 17, post 5 by 153), which X Premium would also solve.
 
 ---
 
@@ -674,7 +674,7 @@ build without asking a question.
 > **2026-09-19: done.** The repo is public and the README's clean-clone path is the
 > last piece of the acceptance line — six of six checklist items closed.
 
-### `[ ]` T35 · Final build-in-public thread
+### `[-]` T35 · Final build-in-public thread
 **Accept:** posted, links the Release and the landing page.
 > **2026-09-16:** draft written to `grant-upload/thread-v0.1.md` — seven posts, the
 > numbers are the real ones from the S2 device pass. It is gitignored on purpose
@@ -683,6 +683,17 @@ build without asking a question.
 > **2026-09-19:** the three links are filled in — Release (the `/tag/v0.1.0` form, which
 > works whether or not the release is promoted), site and video. Still unposted, and it
 > is the last task in the window.
+> **2026-09-19: cut (D24).** Not posted, and not deferred to "later in the window" —
+> withdrawn. Promoting the project under the author's own name carries professional
+> exposure that is not worth it at this size of grant. Nothing in the grant depends on
+> it: the Earn form asks for a personal X profile as a *field*, never for a post, M1–M5
+> never mention a thread, and the final tranche needs only the Colosseum link, the repo
+> and an AI subscription receipt. Checked before cutting, not assumed.
+> **Cost:** the project's only distribution channel goes unused, so the primary KPI —
+> Release APK downloads — has nothing driving it and will sit near zero. That number now
+> measures nothing about demand, which matters if it is ever quoted in a future
+> application. The draft survives at `grant-upload/thread-v0.1.md` (gitignored), links
+> filled, ready if a larger grant later makes the exposure worth it.
 
 ---
 

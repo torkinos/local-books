@@ -752,3 +752,33 @@ Both are now visible in the types instead of implied.
 
 **Revisit if:** the categorization screen does not land post-grant either — then the
 column goes with it, in the same change.
+
+## D24 — Build in public is dropped; the ship thread is cut, not postponed
+
+**Date:** 2026-09-19 · **Status:** accepted — user decision
+
+`PROJECT.md`'s repo conventions promised a weekly build-in-public progress thread, each
+week's post linking the commits, and T35 carried a final ship thread to close it out.
+Neither happens. The weekly cadence lapsed in W1 and was never restored; the ship thread
+is withdrawn. Promoting the project under the author's own name carries professional
+exposure that is not worth it at this size of grant.
+
+Checked before cutting rather than assumed: nothing in the grant depends on it. The
+Superteam Earn form asks for a personal X profile as a *field*, never for a post; the
+milestones M1–M5 never mention a thread; and the final tranche needs only the Colosseum
+project link, the GitHub repo and an AI subscription receipt. The commitment was ours,
+written into our own planning docs, in the same way the demo video's three-minute limit
+was (see T32).
+
+The draft is kept, not deleted, at `grant-upload/thread-v0.1.md` — gitignored, links
+already filled. Posting it later costs one trim pass: all seven posts exceed X's
+280-character limit.
+
+**Cost:** the project's only distribution channel goes unused. The primary KPI named in
+the application — GitHub Release download count for the v0.1 APK — now has nothing
+driving it and will sit near zero. That number measures reach the project never
+attempted, not demand the product failed to find, and should not be quoted as evidence
+of either.
+
+**Revisit if:** a larger grant makes public traction worth the exposure, or the author's
+circumstances change.
