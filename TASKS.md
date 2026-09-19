@@ -40,11 +40,17 @@ thread** — roughly fifteen minutes, eight days before the Sep 27 deadline.
 3. **DONE 2026-09-16.** ~~Clean-install check (~10 min).~~ Uninstall the dev build, install that APK from
    the Release page, watch one address, see one payment. That is T30 and T33's
    "installs on a clean device".
-4. **DONE 2026-09-18.** ~~Video + links (~30 min).~~ Published at **5:32**, not the
-   ≤ 3 min M5 asks for — T32 records that call and what it costs. `TODO_VIDEO_URL` is
-   gone from all three files, develop is merged to master (PR #2), CI is green. One
-   loose end went to session 5: the Release *notes* on GitHub still predate the video
-   and carry no link to it.
+4. **DONE 2026-09-18, re-cut 2026-09-19.** ~~Video + links (~30 min).~~ First cut ran
+   **5:32**; re-uploaded at 2× as a Short, now **2:46** (`rAkFKRttFnE`, verified), which
+   meets M5's "under three minutes" as written. The re-upload changed the video ID, so
+   all five references were swapped — three tracked files plus the two gitignored drafts.
+   `TODO_VIDEO_URL` is long gone, develop is merged to master (PR #2), CI is green.
+   **Two loose ends carried into session 5:** the three tracked files now hold a new ID
+   and are **uncommitted**, and the Release *notes* on GitHub still predate the video
+   entirely. The `gh release edit` in session 5 fixes the second: it reads
+   `docs/releases/v0.1.0.md` from the working tree, so it picks up the new link whether or
+   not the commit has landed. Push anyway, and push first — Pages serves `master:/docs`,
+   so until you do, the live landing page still points at the 5:32 video.
 
 5. **MOSTLY DONE 2026-09-19 — one command left.** ~~Public + Pages + retag~~ + promote.
    Verified from outside today: the repo is **public** (API and HTML both 200,
@@ -563,6 +569,27 @@ backend.
 > between tapping and the chain answering — is exactly what makes someone stop watching
 > before the match and the CSV export, which are the point. Trimming stays available:
 > a YouTube Studio edit keeps the video ID, so the three published links survive it.
+> **2026-09-19: resolved, and the deviation is withdrawn.** Re-uploaded at 2× as a Short
+> — `rAkFKRttFnE`, **2:46** (166 s, confirmed from YouTube), unlisted, playable. The
+> acceptance line below is now met as written, so M5 needs no argument made for it.
+> The speed-up forced a re-upload: YouTube Studio trims without changing the video ID but
+> **cannot change playback speed**, and YouTube does not allow replacing a file on an
+> existing upload. So the ID moved, and all five references were swapped in one pass —
+> `README.md`, `docs/index.html` and `docs/releases/v0.1.0.md` (tracked), plus
+> `GRANT-APPLICATION.md` and `grant-upload/thread-v0.1.md` (gitignored, Mac-only).
+> `git grep yLAAbZGteow` prints nothing; the guard for next time is
+> `grep -rl rAkFKRttFnE` over a `find` list, because this shell's `grep` is `ugrep
+> --ignore-files` and silently skips the two gitignored copies.
+> **Three consequences, none blocking.** Shorts do not render description chapters, so
+> the per-beat markers noted above are gone. At 2× the on-screen numbers — invoice
+> fields, the matched row, the CSV columns — are harder to read than they were, which is
+> the price of meeting a constraint we wrote ourselves rather than one Superteam set
+> (the Earn form's Step 3 is free text and asks for no video at all). And the published
+> links deliberately use the `watch?v=` form rather than `/shorts/`: both resolve, but
+> the desktop Shorts player restricts scrubbing, and a reviewer will scrub.
+> **Optional polish, visible to anyone who clicks through from the README:** the video
+> is titled `local-books-demo` (a filename) and the channel reads `Bruce`. Both are
+> Studio edits that do not touch the ID.
 Cut from footage captured in T16 and T22 — do not re-shoot from scratch.
 **Accept:** ≤ 3 minutes, shows the whole loop (invoice → share → pay → match → report),
 published and linked from the landing page and README.

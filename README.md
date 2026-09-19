@@ -23,7 +23,7 @@ Three things it will never do:
 ## Status
 
 **v0.1.0 is out.** [Download the APK](https://github.com/torkinos/local-books/releases/latest)
-(Android, ~89 MB, signed), watch the [walkthrough](https://www.youtube.com/watch?v=yLAAbZGteow), or read
+(Android, ~89 MB, signed), watch the [walkthrough](https://www.youtube.com/watch?v=rAkFKRttFnE), or read
 the [release notes](./docs/releases/v0.1.0.md) — they name what v0.1 does *not* do as
 plainly as what it does. The landing page is
 [torkinos.github.io/local-books](https://torkinos.github.io/local-books/).
