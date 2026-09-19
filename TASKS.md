@@ -14,12 +14,17 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` cut
 
 ---
 
-## Your side, condensed (2026-09-15)
+## Your side, condensed (revised 2026-09-19)
 
 The device and ship tasks below overlap heavily. Done in this order they collapse to
-six sessions, three of them already behind you; everything not listed here is either
+six sessions, **five of them now behind you**; everything not listed here is either
 done, mine to do in the sandbox (LICENSE, README, landing page HTML, release notes,
 thread draft), or cut.
+
+**Where it stands on 2026-09-19, all verified from outside the sandbox:** repo public,
+Pages live, CI green on master at HEAD, and the APK on the Release page byte-identical
+to the corrected build. What is left is **one `gh` command, one Settings toggle and one
+thread** — roughly fifteen minutes, eight days before the Sep 27 deadline.
 
 1. **DONE 2026-09-15.** ~~One phone session, screen-recorded (~30 min).~~ Follow
    `spikes/02-reference-detection.md`: three payments (QR, second QR, direct
@@ -35,50 +40,42 @@ thread draft), or cut.
 3. **DONE 2026-09-16.** ~~Clean-install check (~10 min).~~ Uninstall the dev build, install that APK from
    the Release page, watch one address, see one payment. That is T30 and T33's
    "installs on a clean device".
-4. **Video + links (~30 min).** The raw recording is ~5 min. Trim it to **under three
-   minutes** in the phone's editor — that is M5's wording in the grant milestones and
-   T32's acceptance, and it is the only reason to trim; no copy in the repo names a
-   duration, so a longer cut contradicts nothing but the milestone. Cut the waiting:
-   the backfill, the second QR payment (the first makes the point), and the pauses
-   between tapping and the chain answering. Upload it unlisted. The link has one
-   placeholder in three files — README, `docs/index.html`,
-   `docs/releases/v0.1.0.md`:
+4. **DONE 2026-09-18, re-cut 2026-09-19.** ~~Video + links (~30 min).~~ First cut ran
+   **5:32**; re-uploaded at 2× as a Short, now **2:46** (`rAkFKRttFnE`, verified), which
+   meets M5's "under three minutes" as written. The re-upload changed the video ID, so
+   all five references were swapped — three tracked files plus the two gitignored drafts.
+   `TODO_VIDEO_URL` is long gone, develop is merged to master (PR #2), CI is green.
+   **Two loose ends carried into session 5:** the three tracked files now hold a new ID
+   and are **uncommitted**, and the Release *notes* on GitHub still predate the video
+   entirely. The `gh release edit` in session 5 fixes the second: it reads
+   `docs/releases/v0.1.0.md` from the working tree, so it picks up the new link whether or
+   not the commit has landed. Push anyway, and push first — Pages serves `master:/docs`,
+   so until you do, the live landing page still points at the 5:32 video.
 
-   ```sh
-   git grep -l TODO_VIDEO_URL | xargs sed -i '' 's#TODO_VIDEO_URL#<the url>#g'  # macOS sed
-   git grep TODO_VIDEO_URL   # must print nothing
-   ```
+5. **DONE 2026-09-19, except one toggle.** ~~Public + Pages + retag + promote.~~
+   All verified from outside: repo **public**, **Pages live** and serving the 2:46 video,
+   release **promoted** (`prerelease: false`) with notes carrying the new link,
+   `/releases/latest` resolving to `/tag/v0.1.0` so the Download CTA works, the APK
+   byte-identical to the corrected build, and CI green on `93b807d`.
 
-   Then `npm run check`, commit, push, **and merge develop → master** — Pages serves
-   `master:/docs`, and the ship-tidy commit `ecb2ede` went to develop, so master is a
-   commit behind and would publish the old landing page. Finally
-   `gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md` so the Release page
-   carries the link too. T32.
-5. **Public + Pages + promote (~15 min).** Do this last: it is the step that is
-   outward-facing. Flip the repo public and verify logged out. Settings → Pages →
-   branch `master`, folder `/docs`. **Retag first:** `v0.1.0` still points at
-   `6e06fec` (Aug 14) — master's stale HEAD when the release was cut, so the Release's
-   source archives are August code. Your local `master` branch has not been checked out
-   since the merge and still sits on that same commit, so tag from the remote, not from
-   it:
+   **Branch protection landed 2026-09-19** (`protected: true`, required check `check`),
+   which closes T4 and with it every repo-side task. Note the trade it brings: master no
+   longer accepts a direct push, so even a one-line docs fix goes branch → CI → merge.
+   Optional leftovers: `v0.1.0` is three commits
+   behind master and its source archives still carry the old video link, so
+   `git tag -f v0.1.0 origin/master && git push --force-with-lease origin v0.1.0` if you want them to
+   match. T1, T21, T31, T33, T34 are closed.
 
-   ```sh
-   git fetch origin
-   git tag -f v0.1.0 origin/master && git push -f origin v0.1.0
-   git log -1 --format='%h %s' v0.1.0   # must print the merge commit, not 6e06fec
-   ```
-
-   Confirm the attached APK is the ~89 MB rebuild (not the publicnode one), then
-   promote the pre-release to a release. Branch protection on master while you are in
-   Settings. T1, T4, T21, T31, T33, T34.
-6. **Thread (~10 min).** Post it from `grant-upload/thread-v0.1.md` (gitignored, so it
-   is on the Mac but not in the repo), linking the Release and the landing page. T35.
+6. **Thread (~10 min).** `grant-upload/thread-v0.1.md` now has its three links filled
+   in — Release, site, video — so it is ready to post as written. It stays gitignored,
+   on the Mac, out of the public repo. Post 4 (the token-account finding) is the one to
+   keep if you cut it short. T35.
 
 ---
 
 ## W1 · Thu Aug 13 – Sun Aug 23 — scaffold + spikes
 
-### `[~]` T1 · Repo, license, README `[M2]`
+### `[x]` T1 · Repo, license, README `[M2]`
 > **2026-08-23:** repo public (verified logged-out, HTTP 200), four root docs present,
 > README added — states watch-only, no backend, and has a build section.
 > **2026-09-14:** reopened. Repo is PRIVATE for now (D22; logged-out fetch returns
@@ -88,6 +85,10 @@ thread draft), or cut.
 > **2026-09-16:** `LICENSE` (MIT) added and merged. Only the flip is left: verified
 > again from outside today, `api.github.com/repos/torkinos/local-books` and the HTML
 > page both return 404 logged out. Session 5.
+> **2026-09-19: done.** The flip happened. Verified from outside, logged out:
+> `api.github.com/repos/torkinos/local-books` and the HTML page both return **200**,
+> the API reports `private: false`, `visibility: public` and detects the MIT licence
+> from the `LICENSE` file. Acceptance met in full.
 Initialise the repo, MIT license, README with a one-paragraph description and a build
 section. Push to GitHub **public**.
 **Accept:** repo reachable at a public URL by someone logged out; README states what the
@@ -109,7 +110,7 @@ Vitest for core. ESLint config banning `react*`, `react-native*`, `expo*`,
 `import 'react-native'` to a core file **fails lint** — demonstrated once and the output
 pasted into the PR. A guard nobody has watched fail is not known to work.
 
-### `[~]` T4 · CI
+### `[x]` T4 · CI
 GitHub Actions: install, typecheck, lint, test on push and PR.
 **Accept:** a red build blocks; badge in README.
 > **2026-08-23:** `.github/workflows/ci.yml` written (typecheck, lint, purity-guard
@@ -121,9 +122,28 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > `node-version-file: .nvmrc`, develop added to the push triggers, `engines.node`
 > and the README now say 24. Remaining: push develop, watch it go green, merge to
 > master, enable branch protection.
-> **2026-09-16:** develop pushed and green, PR #1 merged to master (`0a7c212`), so the
+> **2026-09-16:** develop pushed and green, PR #1 merged to master (`1a0e545`), so the
 > workflow now runs on both branches. Remaining: branch protection on master, which is
 > a Settings click in session 5.
+> **2026-09-19:** CI is **green on master at `1f30395`** (HEAD) — so the suite that
+> cannot run in the sandbox is passing on the real toolchain; no Mac run is owed.
+> Only half the acceptance line is met: the badge is in the README and the workflow
+> runs, but `branches/master` still reports `protected: false`, so a red build does
+> not yet block. That single Settings toggle is all that is left of T4.
+> **2026-09-19, closed.** Classic branch protection is on `master` — verified from
+> outside, `branches/master` now reports `protected: true` (the rulesets API still
+> returns `[]`, which is expected: classic rules are not surfaced there). The required
+> status check is the `check` job from `ci.yml`; the `build`/`deploy`/
+> `report-build-status` names that appear alongside it belong to the Pages deployment
+> workflow and were deliberately not required. Both halves of the acceptance line are
+> now met: the badge is in the README and a red build blocks.
+> **Consequence, effective immediately:** direct `git push origin master` is refused —
+> commits must reach master through a branch whose `check` run has passed.
+> **2026-09-19, still open — checked twice.** `branches/master` reports
+> `protected: false` and `rules/branches/master` returns `[]`, so there is neither a
+> classic protection rule nor a ruleset. CI is green on `93b807d` (HEAD), so the only
+> thing missing is the toggle that makes a red run *block*. This is the last repo-side
+> task in the window.
 
 ### `[x]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
@@ -394,7 +414,7 @@ amount, and reference; sharing works to at least WhatsApp and email.
 > `DocPort.share`. **Remaining on device:** S3 — Phantom scans the QR from the
 > shared PDF with correct mint/amount/reference; share to WhatsApp and email.
 
-### `[~]` T21 · Landing page skeleton `[M2]`
+### `[x]` T21 · Landing page skeleton `[M2]`
 Deployed and thin: what it is, one screenshot, a Release download link.
 **Accept:** live on a public URL, responsive, no analytics (D5). Deployed now so DNS,
 hosting, and the deploy step are not discovered in W6.
@@ -402,6 +422,10 @@ hosting, and the deploy step are not discovered in W6.
 > scripts, no external resources, no analytics (D5 holds by construction). Hosting is
 > GitHub Pages off `master:/docs`, so there is no DNS and no account. Not live yet:
 > Pages needs the repo public (session 5).
+> **2026-09-19: live.** Pages is serving: `torkinos.github.io/local-books` returns 200,
+> `screenshot.png` returns 200, and the served HTML carries the real video link (so
+> Pages is publishing current `master:/docs`, not a stale build). No DNS, no account,
+> no analytics — D5 holds by construction. Acceptance met.
 
 ### `[x]` T22 · Invoice → payment → match, end to end
 **Accept:** create an invoice on the phone, share the PDF, pay from another device, watch
@@ -524,7 +548,7 @@ the full loop; log every rough edge as a fix-or-cut decision.
 
 ## W6 · Mon Sep 21 – Sun Sep 27 — ship
 
-### `[~]` T31 · Landing page content `[M2]`
+### `[x]` T31 · Landing page content `[M2]`
 Real copy, screenshots, the download link, a note that it is watch-only and has no
 backend.
 **Accept:** a stranger understands what it does and who it is for in under 30 seconds.
@@ -532,13 +556,47 @@ backend.
 > never do, what is in v0.1, known limitations, the real phone screenshot
 > (`docs/screenshot.png`), and both buttons (APK, source). The video slot holds
 > `TODO_VIDEO_URL` until session 4.
+> **2026-09-19: done.** The video slot is filled and live on the page. One caveat that
+> is T33's to close, not T31's: the page's **Download the APK** button points at
+> `/releases/latest`, which does not resolve while v0.1.0 is flagged pre-release.
 
-### `[ ]` T32 · Demo video
+### `[x]` T32 · Demo video
+> **2026-09-18:** published at **5:32**, which does not meet the ≤ 3 minutes on the
+> acceptance line below. M5's "under three minutes" is a presentation preference, not a
+> functional criterion, and no copy anywhere in the repo names a duration — so nothing
+> published is contradicted by the longer cut. The whole loop is shown end to end, and
+> chapters in the video description carry a viewer to each beat.
+> **Cost:** a reviewer checking M5 against the shipped video finds the mismatch in one
+> glance, and the uncut waiting — the backfill, the second QR payment, the pauses
+> between tapping and the chain answering — is exactly what makes someone stop watching
+> before the match and the CSV export, which are the point. Trimming stays available:
+> a YouTube Studio edit keeps the video ID, so the three published links survive it.
+> **2026-09-19: resolved, and the deviation is withdrawn.** Re-uploaded at 2× as a Short
+> — `rAkFKRttFnE`, **2:46** (166 s, confirmed from YouTube), unlisted, playable. The
+> acceptance line below is now met as written, so M5 needs no argument made for it.
+> The speed-up forced a re-upload: YouTube Studio trims without changing the video ID but
+> **cannot change playback speed**, and YouTube does not allow replacing a file on an
+> existing upload. So the ID moved, and all five references were swapped in one pass —
+> `README.md`, `docs/index.html` and `docs/releases/v0.1.0.md` (tracked), plus
+> `GRANT-APPLICATION.md` and `grant-upload/thread-v0.1.md` (gitignored, Mac-only).
+> `git grep yLAAbZGteow` prints nothing; the guard for next time is
+> `grep -rl rAkFKRttFnE` over a `find` list, because this shell's `grep` is `ugrep
+> --ignore-files` and silently skips the two gitignored copies.
+> **Three consequences, none blocking.** Shorts do not render description chapters, so
+> the per-beat markers noted above are gone. At 2× the on-screen numbers — invoice
+> fields, the matched row, the CSV columns — are harder to read than they were, which is
+> the price of meeting a constraint we wrote ourselves rather than one Superteam set
+> (the Earn form's Step 3 is free text and asks for no video at all). And the published
+> links deliberately use the `watch?v=` form rather than `/shorts/`: both resolve, but
+> the desktop Shorts player restricts scrubbing, and a reviewer will scrub.
+> **Optional polish, visible to anyone who clicks through from the README:** the video
+> is titled `local-books-demo` (a filename) and the channel reads `Bruce`. Both are
+> Studio edits that do not touch the ID.
 Cut from footage captured in T16 and T22 — do not re-shoot from scratch.
 **Accept:** ≤ 3 minutes, shows the whole loop (invoice → share → pay → match → report),
 published and linked from the landing page and README.
 
-### `[~]` T33 · Release build + GitHub Release `[M2]`
+### `[x]` T33 · Release build + GitHub Release `[M2]`
 > **2026-09-16:** `v0.1.0` published as a **pre-release** with the release-signed
 > APK and `docs/releases/v0.1.0.md` as notes; clean-install check passed on the
 > phone (T30). Remaining: paste the demo video link into the notes and promote the
@@ -561,14 +619,43 @@ published and linked from the landing page and README.
 > its JS bundle has zero `publicnode` hits, carries `api.mainnet-beta.solana.com`,
 > `versionCode: 2`, and an APK Signing Block (so it is release-signed, not unsigned or
 > debug-signed). Confirm the *uploaded* asset is that ~89 MB file. Also open: the
-> `v0.1.0` **tag points at `6e06fec` "Delete grant-upload directory" (Aug 14)** —
+> `v0.1.0` **tag points at `49b58a6` "Delete grant-upload directory" (Aug 14)** —
 > master's HEAD before PR #1 — so the Release's source archives are the August tree.
 > Retag at master and force-push before promoting (session 5).
+> **2026-09-19, verified against the live Release:** the retag happened (`v0.1.0` →
+> `9b92c8c`, on master, one docs-only commit behind HEAD — cosmetic, optional to move
+> again). The **published asset is byte-identical to the corrected build**: the APK
+> downloaded from the Release page and the local
+> `app-release.apk` share one SHA-256 (`f7d84e15…`), 92,940,910 B, and that build is
+> versionCode 3, carries an APK Signing Block, names `api.mainnet-beta.solana.com` and
+> has **zero `publicnode` hits**. The publicnode scare is fully out of the shipped
+> artifact; no re-upload is owed.
+> **Two things still open, and both are now user-facing:** the release is still flagged
+> `prerelease: true`, so `/releases/latest` **404s in the API and redirects browsers to
+> the releases index** — and that URL is the "Download the APK" target on both the live
+> landing page and the README, so the product's main CTA is degraded for every visitor.
+> The release notes on GitHub also predate the video and carry no link to it. One
+> command fixes both:
+>
+> ```sh
+> gh release edit v0.1.0 --notes-file docs/releases/v0.1.0.md --prerelease=false
+> curl -sI https://github.com/torkinos/local-books/releases/latest | head -1  # expect 302 → /tag/v0.1.0
+> ```
+> **2026-09-19, closed — verified live.** The release is promoted (`prerelease: false`,
+> `draft: false`), its notes carry the 2:46 video and still name the deferred items, and
+> `/releases/latest` resolves again: 200 from the API, and the browser URL lands on
+> `/tag/v0.1.0`. So the **Download the APK** CTA works on both the landing page and the
+> README. The attached APK is untouched at 92,940,910 B. Acceptance met in full.
+> **One loose thread, cosmetic but real:** `v0.1.0` now sits **three commits behind
+> master**, and the tagged tree predates the video swap — so the Release's *Source code*
+> archives still contain the old `yLAAbZGteow` link in README, `docs/index.html` and the
+> release notes. If that upload gets deleted, those archives carry a dead link. Fix, if
+> you want it: `git tag -f v0.1.0 origin/master && git push --force-with-lease origin v0.1.0`.
 Signed APK, release notes, known limitations stated plainly.
 **Accept:** downloads and installs from a logged-out browser on a clean device; the loop
 works; release notes name the deferred items so expectations are set.
 
-### `[~]` T34 · Repo tidy for grant review `[M2]`
+### `[x]` T34 · Repo tidy for grant review `[M2]`
 README, architecture note, `DECISIONS.md` current, build instructions that work from a
 clean clone.
 **Accept:** someone else follows the README on a fresh machine and gets a running dev
@@ -584,6 +671,8 @@ build without asking a question.
 > commands, so a clean clone reaches a running dev build without asking; the T12 note is
 > corrected; `CorePorts` removed and `category-assigned` documented (D23). Remaining:
 > flip the repo public (session 5).
+> **2026-09-19: done.** The repo is public and the README's clean-clone path is the
+> last piece of the acceptance line — six of six checklist items closed.
 
 ### `[ ]` T35 · Final build-in-public thread
 **Accept:** posted, links the Release and the landing page.
@@ -591,6 +680,9 @@ build without asking a question.
 > numbers are the real ones from the S2 device pass. It is gitignored on purpose
 > (`grant-upload/`): a marketing draft does not belong in a public repo. Fill the three
 > bracketed links before posting.
+> **2026-09-19:** the three links are filled in — Release (the `/tag/v0.1.0` form, which
+> works whether or not the release is promoted), site and video. Still unposted, and it
+> is the last task in the window.
 
 ---
 
