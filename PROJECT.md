@@ -136,4 +136,5 @@ The real incumbent is a spreadsheet plus a block explorer.
 - `PLAN.md` — week-by-week plan to the target date.
 - `TASKS.md` — agent-executable tasks (≤ half a day each, with acceptance criteria); M2 grant deliverables flagged.
 - `DECISIONS.md` — every non-obvious technical decision, recorded when made.
-- Build in public: weekly progress thread; each week's post links the commits.
+- Build in public: dropped (D24). The weekly progress thread lapsed in W1 and the ship
+  thread is cut; the repo, the Release and the landing page are the public record instead.
