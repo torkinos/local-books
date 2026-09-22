@@ -127,8 +127,10 @@ and invoice PDF + QR are never cut; they are the demo.
 **Wed Sep 16: feature freeze.** Nothing new after this, including "small" things.
 
 Thursday onward is polish on what exists: empty states, error copy, the backfill progress
-UI, and the honest framing PROJECT.md line 62 insists on — "checks when you open, and
-periodically in the background on Android", never a real-time promise.
+UI, and the honest framing PROJECT.md line 62 insists on — "checks when you open the app,
+and while it is open", never a real-time promise. (The earlier wording here promised
+"periodically in the background on Android"; nothing implemented it and v0.1 ships
+foreground-only — see D20.)
 
 ---
 

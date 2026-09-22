@@ -21,10 +21,14 @@ six sessions, **five of them now behind you**; everything not listed here is eit
 done, mine to do in the sandbox (LICENSE, README, landing page HTML, release notes,
 thread draft), or cut.
 
-**Where it stands on 2026-09-19, all verified from outside the sandbox:** repo public,
-Pages live, CI green on master at HEAD, and the APK on the Release page byte-identical
-to the corrected build. What is left is **one `gh` command, one Settings toggle and one
-thread** — roughly fifteen minutes, eight days before the Sep 27 deadline.
+**Where it stands on 2026-09-22, all verified from outside the sandbox:** repo public,
+Pages live, CI green on master at HEAD, the APK on the Release page byte-identical to
+the corrected build, the release promoted and branch protection on. **Nothing in this
+tracker is open**, and the grant's final tranche was submitted on 2026-09-22.
+
+One loose end survives outside the task list: the `v0.1.0` tag still sits 8 commits
+behind master, so the Release's generated *Source code* archives carry the superseded
+video link. See T33.
 
 1. **DONE 2026-09-15.** ~~One phone session, screen-recorded (~30 min).~~ Follow
    `spikes/02-reference-detection.md`: three payments (QR, second QR, direct
@@ -52,7 +56,10 @@ thread** — roughly fifteen minutes, eight days before the Sep 27 deadline.
    not the commit has landed. Push anyway, and push first — Pages serves `master:/docs`,
    so until you do, the live landing page still points at the 5:32 video.
 
-5. **DONE 2026-09-19, except one toggle.** ~~Public + Pages + retag + promote.~~
+5. **DONE 2026-09-19, except the retag.** ~~Public + Pages + retag + promote.~~
+   Branch protection landed the same day (T4). **The retag is still open:** `v0.1.0`
+   points at `9b92c8c`, 8 commits behind master, so the Release's generated *Source
+   code* archives still link the superseded 5:32 video.
    All verified from outside: repo **public**, **Pages live** and serving the 2:46 video,
    release **promoted** (`prerelease: false`) with notes carrying the new link,
    `/releases/latest` resolving to `/tag/v0.1.0` so the Download CTA works, the APK
@@ -139,11 +146,17 @@ GitHub Actions: install, typecheck, lint, test on push and PR.
 > now met: the badge is in the README and a red build blocks.
 > **Consequence, effective immediately:** direct `git push origin master` is refused —
 > commits must reach master through a branch whose `check` run has passed.
-> **2026-09-19, still open — checked twice.** `branches/master` reports
+> ~~**2026-09-19, still open — checked twice.** `branches/master` reports
 > `protected: false` and `rules/branches/master` returns `[]`, so there is neither a
 > classic protection rule nor a ruleset. CI is green on `93b807d` (HEAD), so the only
 > thing missing is the toggle that makes a red run *block*. This is the last repo-side
-> task in the window.
+> task in the window.~~
+> **2026-09-22 — the note above is wrong. Struck, not deleted.** It was filed out of
+> order, after the toggle had already been flipped, and it contradicts the "closed" note
+> directly above it. Re-checked live today: `branches/master` returns `protected: true`
+> with `protection.enabled: true` and status checks enforced for non-admins.
+> `rules/branches/master` returning `[]` is expected for a **classic** protection rule
+> and was misread as absence. T4 is closed; nothing in it is open.
 
 ### `[x]` T5 · Expo prebuild + dev client on a physical Android device
 Expo app in `apps/mobile`, prebuild, dev client, **pinned SDK** (D2).
@@ -579,7 +592,9 @@ backend.
 > existing upload. So the ID moved, and all five references were swapped in one pass —
 > `README.md`, `docs/index.html` and `docs/releases/v0.1.0.md` (tracked), plus
 > `GRANT-APPLICATION.md` and `grant-upload/thread-v0.1.md` (gitignored, Mac-only).
-> `git grep yLAAbZGteow` prints nothing; the guard for next time is
+> `git grep yLAAbZGteow` now prints only retro notes like this one — no live link to the
+> old cut survives on master, though the `v0.1.0` **tag** still serves one until it is
+> moved (T33). The guard for next time is
 > `grep -rl rAkFKRttFnE` over a `find` list, because this shell's `grep` is `ugrep
 > --ignore-files` and silently skips the two gitignored copies.
 > **Three consequences, none blocking.** Shorts do not render description chapters, so
